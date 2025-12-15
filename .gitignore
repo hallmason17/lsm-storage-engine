@@ -1,0 +1,7 @@
+build/
+
+*.log
+compile_commands*
+
+.*
+!.gitignore
