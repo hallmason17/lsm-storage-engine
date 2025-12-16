@@ -6,17 +6,15 @@ Building an LSM-tree storage engine in C++ from scratch for learning.
 Understand how databases like RocksDB work by implementing the core concepts myself.
 
 ## Status
+Implementing everything naively first and optimizing later.
 
-Currently implemented:
 - [ ] Basic MemTable
-- [ ] SSTable format
 - [ ] Write-ahead log
-- [ ] Compaction
-- [ ] Bloom filters
+- [ ] SSTable format
 
 ## Building
 ```bash
-mkdir build && cd build
+mkdir -p build && cd build
 cmake ..
 make
 ```
