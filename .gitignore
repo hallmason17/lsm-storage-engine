@@ -1,6 +1,8 @@
 build/
 
 *.log
+*.wal
+*.sst
 compile_commands*
 
 .*
