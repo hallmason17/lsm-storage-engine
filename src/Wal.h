@@ -39,12 +39,12 @@ private:
   std::filesystem::path path_;
 
   /**
-   * This is quick and hacky, but is a placeholder for now.
+   * This is quick and hacky; just a placeholder for now.
    *
    * ofstream does not immediately flush to disk, but goes to an in-memory
-   * buffer first. Not usable for a storage engine.
+   * buffer first. Not robust enough for a storage engine.
    *
-   * TODO: replace with syscalls
+   * TODO: replace with fd and use syscalls for interacting.
    */
   std::ofstream file_;
 };
