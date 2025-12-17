@@ -9,6 +9,9 @@ FetchContent_MakeAvailable(googletest)
 enable_testing()
 
 add_executable(lsm_test
+    MemTableTest.cc
+    WalTest.cc
+    LsmTreeTest.cc
 )
 target_link_libraries(lsm_test lsm_lib gtest_main)
 

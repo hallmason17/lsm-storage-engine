@@ -16,5 +16,5 @@ add_executable(lsm src/main.cc)
 target_link_libraries(lsm lsm_lib)
 
 
-# add_subdirectory(test)
+add_subdirectory(test)
 # add_subdirectory(benchmark)
