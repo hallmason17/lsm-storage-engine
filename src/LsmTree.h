@@ -6,6 +6,7 @@
 #include <string_view>
 #include <vector>
 namespace lsm_storage_engine {
+
 /**
  * @brief Core LSM-tree storage engine.
  *
