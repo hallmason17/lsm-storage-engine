@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(lsm_lib
     src/LsmTree.cc
+    src/MemTable.cc
+    src/Wal.cc
 )
 
 target_include_directories(lsm_lib PUBLIC src)

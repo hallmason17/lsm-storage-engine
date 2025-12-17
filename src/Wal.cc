@@ -1,4 +1,4 @@
-#pragma once
+#include "Wal.h"
 namespace lsm_storage_engine {
-class SSTable {};
+void Wal::write(const std::string &message) {}
 } // namespace lsm_storage_engine
