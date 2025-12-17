@@ -44,3 +44,22 @@ TEST(MemTableTest, EmptyKeyAndValue) {
   EXPECT_EQ(*table.get(""), "empty_key");
   EXPECT_EQ(*table.get("empty_value"), "");
 }
+
+TEST(MemTableTest, PutIncrementsSize) {
+  MemTable table;
+  table.put("key1", "value1");
+
+  EXPECT_EQ(table.size(),
+            std::string("key1").size() + std::string("value1").size());
+}
+
+TEST(MemTableTest, PutExistingKeyUpdatesSize) {
+  MemTable table;
+  table.put("key1", "value1");
+
+  EXPECT_EQ(table.size(),
+            std::string("key1").size() + std::string("value1").size());
+
+  table.put("key1", "1");
+  EXPECT_EQ(table.size(), std::string("key1").size() + std::string("1").size());
+}

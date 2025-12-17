@@ -1,10 +1,9 @@
 #include "LsmTree.h"
-#include <iostream>
 int main() {
   using namespace lsm_storage_engine;
   LsmTree lsm;
   lsm.put("foo", "bar");
   auto bar = lsm.get("foo");
-  std::cout << *bar;
+  lsm.put("foo", "bar11");
   return 0;
 }
