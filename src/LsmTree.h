@@ -3,6 +3,7 @@
 #include "SSTable.h"
 #include "Wal.h"
 #include <optional>
+#include <shared_mutex>
 #include <string_view>
 #include <vector>
 namespace lsm_storage_engine {
@@ -26,13 +27,13 @@ public:
     mem_table_.restore_from_wal(wal_.path());
   }
 
-  // Prevent the object from being copied
+  /// Prevent the object from being copied
   LsmTree(const LsmTree &) = delete;
   LsmTree &operator=(const LsmTree &) = delete;
 
-  // Default move constructor
-  LsmTree(LsmTree &&) noexcept = default;
-  LsmTree &operator=(LsmTree &&) noexcept = default;
+  /// Delete move constructors for shared_mutex
+  LsmTree(LsmTree &&) noexcept = delete;
+  LsmTree &operator=(LsmTree &&) noexcept = delete;
 
   /**
    * @brief Retrieve the value of a key
@@ -57,5 +58,8 @@ private:
    * Will have to revisit once I get to compaction.
    */
   std::vector<SSTable> ss_tables_;
+
+  /// Basic RWLock for multithreaded access.
+  std::shared_mutex rwlock_;
 };
 } // namespace lsm_storage_engine
