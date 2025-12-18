@@ -23,6 +23,15 @@ void LsmTree::put(const std::string &key, const std::string &value) {
   wal_.write(msg);
   mem_table_.put(key, value);
   if (mem_table_.should_flush()) {
+    int i{0};
+    auto path = std::filesystem::path{"test.sst"};
+    while (std::filesystem::exists(path)) {
+      path = std::to_string(i) + "test.sst";
+      i++;
+    }
+    auto res = mem_table_.flush_to_disk(path);
+    mem_table_.clear();
+    wal_.clear();
     // 1. Create SSTable
     // 2. Write contents of memtable to it
     // 3. Clear the WAL
