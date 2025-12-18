@@ -7,9 +7,7 @@ class LsmTreeTest : public ::testing::Test {
 protected:
   std::filesystem::path wal_path_ = "lsm.wal";
 
-  void TearDown() override {
-    std::filesystem::remove(wal_path_);
-  }
+  void TearDown() override { std::filesystem::remove(wal_path_); }
 };
 
 TEST_F(LsmTreeTest, GetReturnsNulloptForMissingKey) {
