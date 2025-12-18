@@ -13,5 +13,8 @@ add_executable(lsm_test
     WalTest.cc
     LsmTreeTest.cc
 )
+target_link_options(lsm_test PRIVATE
+  $<$<CONFIG:Debug>:-fsanitize=address,undefined>
+)
 target_link_libraries(lsm_test lsm_lib gtest_main)
 
