@@ -2,7 +2,7 @@
 #include "StorageError.h"
 #include <cstdint>
 #include <fstream>
-#include <iostream>
+#include <print>
 namespace lsm_storage_engine {
 
 std::optional<std::string> MemTable::get(const std::string_view key) const {
@@ -14,17 +14,18 @@ std::optional<std::string> MemTable::get(const std::string_view key) const {
 }
 void MemTable::put(std::string key, std::string value) {
   if (map_.contains(key)) {
-    std::string val = map_.find(key)->second;
-    int diff = value.size() - val.size();
-    size_ += diff;
+    const std::string_view oldval = map_.find(key)->second;
+    size_ -= oldval.size();
+    size_ += value.size();
   } else {
     size_ += (key.size() + value.size());
   }
-  std::cout << size_ << "/" << flush_threshold_ << "B\n";
   map_.insert_or_assign(std::move(key), std::move(value));
 }
 
-void MemTable::restore_from_wal(const std::filesystem::path &wal_path) {}
+void MemTable::restore_from_wal(const std::filesystem::path &wal_path) {
+  std::print("{}", wal_path.c_str());
+}
 
 std::expected<void, StorageError>
 MemTable::flush_to_disk(const std::filesystem::path &path) {
@@ -32,10 +33,9 @@ MemTable::flush_to_disk(const std::filesystem::path &path) {
   if (!of) {
     return std::unexpected(StorageError::file_open(path));
   }
-  for (auto it = map_.begin(); it != map_.end(); ++it) {
-    auto keylen = static_cast<uint32_t>(it->first.size());
-    auto valuelen = static_cast<uint32_t>(it->second.size());
-    of << keylen << valuelen << it->first.data() << it->second.data();
+  for (const auto &[key, val] : map_) {
+    of << static_cast<uint32_t>(key.size()) << static_cast<uint32_t>(val.size())
+       << key.data() << val.data();
   }
   if (!of) {
     return std::unexpected(StorageError::file_write(path));
