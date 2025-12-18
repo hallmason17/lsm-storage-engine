@@ -1,6 +1,6 @@
 #pragma once
 #include <filesystem>
-#include <fstream>
+#include <string_view>
 namespace lsm_storage_engine {
 
 /**
@@ -12,22 +12,22 @@ namespace lsm_storage_engine {
  */
 class Wal {
 public:
-  explicit Wal(std::filesystem::path filename)
-      : path_{std::move(filename)}, file_{path_, std::ios::app} {}
+  explicit Wal(std::filesystem::path filename);
+  ~Wal();
 
   /// Managing file handles, so no copies.
   Wal(const Wal &) = delete;
   Wal &operator=(const Wal &) = delete;
 
   /// Moving resources OK.
-  Wal(Wal &&) = default;
-  Wal &operator=(Wal &&) = default;
+  Wal(Wal &&other) noexcept;
+  Wal &operator=(Wal &&other) noexcept;
 
   /**
-   * @brief Write a message to the log
+   * @brief Write a message to the log and sync to disk.
    * @param message The message to append to the log
    */
-  void write(const std::string &message);
+  void write(std::string_view message);
 
   /**
    * @brief Get the path to the WAL.
@@ -35,19 +35,21 @@ public:
    */
   const std::filesystem::path &path() const { return path_; }
 
+  /**
+   * @brief Truncate the WAL to zero bytes.
+   */
   void clear();
+
+  /**
+   * @brief Sync buffered writes to disk.
+   */
+  void sync();
 
 private:
   std::filesystem::path path_;
+  int fd_{-1};
 
-  /**
-   * This is quick and hacky; just a placeholder for now.
-   *
-   * ofstream does not immediately flush to disk, but goes to an in-memory
-   * buffer first. Not robust enough for a storage engine.
-   *
-   * TODO: replace with fd and use syscalls for interacting.
-   */
-  std::ofstream file_;
+  void open_file();
+  void close_file();
 };
 } // namespace lsm_storage_engine
