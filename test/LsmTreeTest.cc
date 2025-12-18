@@ -1,4 +1,5 @@
 #include "LsmTree.h"
+#include <fstream>
 #include <gtest/gtest.h>
 
 using namespace lsm_storage_engine;
