@@ -3,8 +3,8 @@
 #include <filesystem>
 #include <format>
 #include <optional>
-#include <print>
 #include <shared_mutex>
+#include <stdexcept>
 namespace lsm_storage_engine {
 std::optional<std::string> LsmTree::get(const std::string_view key) {
   // Reads don't block other reads, but block writes.
@@ -20,7 +20,9 @@ void LsmTree::put(const std::string &key, const std::string &value) {
 
   // Lock to ensure these two operations are atomic.
   std::unique_lock lock(rwlock_);
-  wal_.write(msg);
+  if (!wal_.write(msg)) {
+    throw std::runtime_error("Failed to write to WAL!");
+  }
   mem_table_.put(key, value);
   if (mem_table_.should_flush()) {
     int i{0};
@@ -29,9 +31,13 @@ void LsmTree::put(const std::string &key, const std::string &value) {
       path = std::to_string(i) + "test.sst";
       i++;
     }
-    auto res = mem_table_.flush_to_disk(path);
+    if (!mem_table_.flush_to_disk(path)) {
+      throw std::runtime_error("Failed to write memtable to disk!");
+    }
     mem_table_.clear();
-    wal_.clear();
+    if (!wal_.clear()) {
+      throw std::runtime_error("Could not empty the WAL!");
+    }
     // 1. Create SSTable
     // 2. Write contents of memtable to it
     // 3. Clear the WAL
