@@ -1,4 +1,6 @@
 #include "Wal.h"
+#include "StorageError.h"
+#include <expected>
 #include <fcntl.h>
 #include <stdexcept>
 #include <sys/stat.h>
@@ -8,7 +10,9 @@
 namespace lsm_storage_engine {
 
 Wal::Wal(std::filesystem::path filename) : path_{std::move(filename)} {
-  open_file();
+  if (!open_file()) {
+    throw std::runtime_error("Unable to open WAL");
+  }
 }
 
 Wal::~Wal() { close_file(); }
@@ -25,14 +29,15 @@ Wal &Wal::operator=(Wal &&other) noexcept {
   return *this;
 }
 
-void Wal::open_file() {
+std::expected<void, StorageError> Wal::open_file() {
   // O_WRONLY: write only
   // O_CREAT: create if doesn't exist
   // O_APPEND: all writes go to end of file
   fd_ = ::open(path_.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
   if (fd_ == -1) {
-    throw std::runtime_error("Failed to open WAL file: " + path_.string());
+    return std::unexpected{StorageError::file_open(path())};
   }
+  return {};
 }
 
 void Wal::close_file() {
@@ -42,35 +47,38 @@ void Wal::close_file() {
   }
 }
 
-void Wal::write(std::string_view message) {
+std::expected<void, StorageError> Wal::write(std::string_view message) {
   const char *data = message.data();
   size_t remaining = message.size();
 
   while (remaining > 0) {
     ssize_t written = ::write(fd_, data, remaining);
     if (written == -1) {
-      throw std::runtime_error("Failed to write to WAL");
+      return std::unexpected{StorageError::file_write(path())};
     }
     data += written;
-    remaining -= written;
+    remaining -= static_cast<size_t>(written);
   }
 
   // Ensure data reaches disk
-  sync();
+  return sync();
 }
 
-void Wal::sync() {
+std::expected<void, StorageError> Wal::sync() {
   if (::fsync(fd_) == -1) {
-    throw std::runtime_error("Failed to sync WAL to disk");
+    return std::unexpected{StorageError::file_write(path())};
   }
+  return {};
 }
 
-void Wal::clear() {
+std::expected<void, StorageError> Wal::clear() {
   // Truncate file to zero bytes
   if (::ftruncate(fd_, 0) == -1) {
-    throw std::runtime_error("Failed to truncate WAL");
+    return std::unexpected{StorageError::file_write(path())};
   }
-  // With O_APPEND, the write position automatically goes to end (which is now 0)
+  // With O_APPEND, the write position automatically goes to end (which is now
+  // 0)
+  return {};
 }
 
 } // namespace lsm_storage_engine

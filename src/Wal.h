@@ -1,4 +1,6 @@
 #pragma once
+#include "StorageError.h"
+#include <expected>
 #include <filesystem>
 #include <string_view>
 namespace lsm_storage_engine {
@@ -27,7 +29,7 @@ public:
    * @brief Write a message to the log and sync to disk.
    * @param message The message to append to the log
    */
-  void write(std::string_view message);
+  std::expected<void, StorageError> write(std::string_view message);
 
   /**
    * @brief Get the path to the WAL.
@@ -38,18 +40,18 @@ public:
   /**
    * @brief Truncate the WAL to zero bytes.
    */
-  void clear();
+  std::expected<void, StorageError> clear();
 
   /**
    * @brief Sync buffered writes to disk.
    */
-  void sync();
+  std::expected<void, StorageError> sync();
 
 private:
   std::filesystem::path path_;
   int fd_{-1};
 
-  void open_file();
+  std::expected<void, StorageError> open_file();
   void close_file();
 };
 } // namespace lsm_storage_engine
