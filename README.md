@@ -8,9 +8,17 @@ Understand how databases like RocksDB work by implementing the core concepts mys
 ## Status
 Implementing everything naively first and optimizing later.
 
-- [ ] Basic MemTable
-- [ ] Write-ahead log
-- [ ] SSTable format
+### Completed
+- [x] Basic MemTable (get/put, size tracking)
+- [x] Write-ahead log (write, clear, fsync durability)
+
+### Remaining for naive v1
+- [ ] SSTable compaction/garbage collection
+- [ ] MemTable flush creates proper SSTables
+- [ ] SSTable tracking (which SSTables are part of the system?)
+- [ ] SSTable read path (scan SSTables when key not in memtable)
+- [ ] WAL recovery (rebuild memtable on startup)
+- [ ] Delete operation (tombstone markers)
 
 ## Building
 ```bash
