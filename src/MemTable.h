@@ -19,7 +19,8 @@ public:
     map_.erase(map_.begin(), map_.end());
     size_ = 0;
   }
-  std::expected<void, StorageError> flush_to_disk(std::filesystem::path &path);
+  std::expected<void, StorageError>
+  flush_to_disk(const std::filesystem::path &path);
 
 private:
   std::map<std::string, std::string> map_;

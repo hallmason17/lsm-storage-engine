@@ -27,7 +27,7 @@ void MemTable::put(std::string key, std::string value) {
 void MemTable::restore_from_wal(const std::filesystem::path &wal_path) {}
 
 std::expected<void, StorageError>
-MemTable::flush_to_disk(std::filesystem::path &path) {
+MemTable::flush_to_disk(const std::filesystem::path &path) {
   std::ofstream of(path, std::ios::binary | std::ios::app);
   if (!of) {
     return std::unexpected(StorageError::file_open(path));
