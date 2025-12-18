@@ -1,6 +1,9 @@
 #include "LsmTree.h"
+#include "MemTable.h"
+#include <filesystem>
 #include <format>
 #include <optional>
+#include <print>
 #include <shared_mutex>
 namespace lsm_storage_engine {
 std::optional<std::string> LsmTree::get(const std::string_view key) {
@@ -19,5 +22,10 @@ void LsmTree::put(const std::string &key, const std::string &value) {
   std::unique_lock lock(rwlock_);
   wal_.write(msg);
   mem_table_.put(key, value);
+  if (mem_table_.should_flush()) {
+    // 1. Create SSTable
+    // 2. Write contents of memtable to it
+    // 3. Clear the WAL
+  }
 }
 } // namespace lsm_storage_engine

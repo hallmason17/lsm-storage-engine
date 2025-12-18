@@ -35,6 +35,8 @@ public:
    */
   const std::filesystem::path &path() const { return path_; }
 
+  void clear();
+
 private:
   std::filesystem::path path_;
 
