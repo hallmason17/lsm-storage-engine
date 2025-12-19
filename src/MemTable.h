@@ -12,7 +12,8 @@ public:
       : size_(0), flush_threshold_(lsm_constants::kMemTableFlushThreshold) {}
   std::optional<std::string> get(const std::string_view key) const;
   void put(std::string key, std::string value);
-  void restore_from_wal(const std::filesystem::path &wal_path);
+  std::expected<void, StorageError>
+  restore_from_wal(const std::filesystem::path &wal_path);
   size_t size() const { return size_; }
   bool should_flush() const { return size() > flush_threshold_; }
   void clear() {
