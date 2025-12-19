@@ -2,8 +2,13 @@
 #include "MemTable.h"
 #include "SSTable.h"
 #include "Wal.h"
+#include <atomic>
+#include <chrono>
+#include <filesystem>
 #include <optional>
+#include <print>
 #include <shared_mutex>
+#include <stdexcept>
 #include <string_view>
 #include <vector>
 namespace lsm_storage_engine {
@@ -24,7 +29,14 @@ public:
   // What do I even name a WAL?
   LsmTree() : wal_(std::filesystem::path("lsm.wal")) {
     // Restore the memtable from WAL on startup.
-    mem_table_.restore_from_wal(wal_.path());
+    auto result = mem_table_.restore_from_wal(wal_.path());
+    if (!result) {
+      std::println("{}", result.error().message);
+      throw std::runtime_error("Could not restore state from WAL!");
+    }
+    if (!load_ssts(std::filesystem::current_path())) {
+      throw std::runtime_error("Could not load SSTables!");
+    }
   }
 
   /// Prevent the object from being copied
@@ -49,6 +61,19 @@ public:
    */
   void put(const std::string &key, const std::string &value);
 
+  struct Stats {
+    unsigned long get_count;
+    unsigned long put_count;
+    double avg_get_time_us;
+    double avg_put_time_us;
+  };
+
+  /**
+   * @brief Get operation timing statistics
+   * @return Stats containing counts and average times in microseconds
+   */
+  Stats stats() const;
+
 private:
   MemTable mem_table_;
   Wal wal_;
@@ -61,5 +86,15 @@ private:
 
   /// Basic RWLock for multithreaded access.
   std::shared_mutex rwlock_;
+
+  std::expected<void, StorageError>
+  load_ssts(const std::filesystem::path &path);
+
+  // Timing stats - using atomics for thread-safe updates without holding the
+  // main lock
+  std::atomic<unsigned long> get_count_{0};
+  std::atomic<unsigned long> put_count_{0};
+  std::atomic<long long> total_get_time_us_{0};
+  std::atomic<long long> total_put_time_us_{0};
 };
 } // namespace lsm_storage_engine
