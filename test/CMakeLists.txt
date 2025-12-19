@@ -12,6 +12,7 @@ add_executable(lsm_test
     MemTableTest.cc
     WalTest.cc
     LsmTreeTest.cc
+    SSTableTest.cc
 )
 target_link_options(lsm_test PRIVATE
   $<$<CONFIG:Debug>:-fsanitize=address,undefined>

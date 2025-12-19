@@ -1,5 +1,6 @@
 #include "MemTable.h"
 #include "Constants.h"
+#include "SSTable.h"
 #include "StorageError.h"
 #include <filesystem>
 #include <fstream>
@@ -163,4 +164,67 @@ TEST_F(MemTableFlushTest, FlushEmptyTableSucceeds) {
   MemTable table;
   auto result = table.flush_to_disk(test_path_);
   EXPECT_TRUE(result.has_value());
+}
+
+// --- Roundtrip tests (flush to disk, read via SSTable) ---
+
+TEST_F(MemTableFlushTest, FlushThenReadViaSSTablSingleEntry) {
+  MemTable table;
+  table.put("key1", "value1");
+
+  auto flush_result = table.flush_to_disk(test_path_);
+  ASSERT_TRUE(flush_result.has_value());
+
+  SSTable sst(test_path_);
+  auto get_result = sst.get("key1");
+  ASSERT_TRUE(get_result.has_value()) << "SSTable get() returned error";
+  ASSERT_TRUE(get_result->has_value()) << "Key not found in SSTable";
+  EXPECT_EQ(**get_result, "value1");
+}
+
+TEST_F(MemTableFlushTest, FlushThenReadViaSSTablMultipleEntries) {
+  MemTable table;
+  table.put("apple", "red");
+  table.put("banana", "yellow");
+  table.put("cherry", "red");
+
+  auto flush_result = table.flush_to_disk(test_path_);
+  ASSERT_TRUE(flush_result.has_value());
+
+  SSTable sst(test_path_);
+
+  auto r1 = sst.get("apple");
+  ASSERT_TRUE(r1.has_value() && r1->has_value());
+  EXPECT_EQ(**r1, "red");
+
+  auto r2 = sst.get("banana");
+  ASSERT_TRUE(r2.has_value() && r2->has_value());
+  EXPECT_EQ(**r2, "yellow");
+
+  auto r3 = sst.get("cherry");
+  ASSERT_TRUE(r3.has_value() && r3->has_value());
+  EXPECT_EQ(**r3, "red");
+}
+
+TEST_F(MemTableFlushTest, FlushPreservesKeyOrder) {
+  // MemTable uses std::map which keeps keys sorted
+  // Verify that SSTable can still find keys regardless of insertion order
+  MemTable table;
+  table.put("zebra", "z");
+  table.put("alpha", "a");
+  table.put("middle", "m");
+
+  auto flush_result = table.flush_to_disk(test_path_);
+  ASSERT_TRUE(flush_result.has_value());
+
+  SSTable sst(test_path_);
+
+  // Keys should be stored in sorted order (alpha, middle, zebra)
+  auto r1 = sst.get("alpha");
+  ASSERT_TRUE(r1.has_value() && r1->has_value());
+  EXPECT_EQ(**r1, "a");
+
+  auto r2 = sst.get("zebra");
+  ASSERT_TRUE(r2.has_value() && r2->has_value());
+  EXPECT_EQ(**r2, "z");
 }
