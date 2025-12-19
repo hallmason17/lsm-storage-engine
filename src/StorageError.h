@@ -15,5 +15,9 @@ struct StorageError {
   static StorageError file_write(const std::filesystem::path &path) {
     return {Kind::FileWrite, "Could not write to file", path};
   }
+
+  static StorageError file_read(const std::filesystem::path &path) {
+    return {Kind::FileRead, "Failed to read file", path};
+  }
 };
 } // namespace lsm_storage_engine
