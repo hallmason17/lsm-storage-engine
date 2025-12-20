@@ -1,7 +1,7 @@
 #pragma once
-#include <cstddef>
 namespace lsm_storage_engine {
 namespace lsm_constants {
-constexpr unsigned long kMemTableFlushThreshold = 1UZ << 8;
-}
+// TODO: Add to configuration.
+constexpr unsigned long kMemTableFlushThreshold = 1UZ << 16;
+} // namespace lsm_constants
 }; // namespace lsm_storage_engine
