@@ -84,7 +84,6 @@ std::expected<void, StorageError> LsmTree::load_ssts() {
     std::string line;
     while (std::getline(metafile, line)) {
       if (line.contains(".sst")) {
-        std::println(stderr, "Meta file line: {}", line);
         SSTable sst = SSTable::open(std::string(line)).value();
         ss_tables_.emplace_back(std::move(sst));
       }

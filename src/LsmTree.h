@@ -80,7 +80,7 @@ private:
   Wal wal_;
 
   /**
-   * SSTables ordered newest to oldest.
+   * SSTables ordered oldest to newest (new SSTables are pushed to back).
    * Will have to revisit once I get to compaction.
    */
   std::vector<SSTable> ss_tables_;

@@ -18,22 +18,26 @@ namespace lsm_storage_engine {
  */
 class SSTable {
 public:
+  SSTable() {}
+
   /**
    * @brief Creates a new SSTable with a generated filename.
    *
    * The filename is the current timestamp to ensure uniqueness.
-   * @throws std::runtime_error if the file cannot be opened/created.
+   * @return SSTable on success, StorageError if the file cannot be created.
    */
-  SSTable() {}
-  /// New SSTable
   static std::expected<SSTable, StorageError> create();
-  /// Existing
-  static std::expected<SSTable, StorageError> open(const std::filesystem::path);
 
   /**
    * @brief Opens an existing SSTable from the specified path.
    * @param path Path to the SSTable file.
-   * @throws std::runtime_error if the file cannot be opened.
+   * @return SSTable on success, StorageError if the file cannot be opened.
+   */
+  static std::expected<SSTable, StorageError> open(const std::filesystem::path);
+
+  /**
+   * @brief Constructs an SSTable with the given path (does not open file).
+   * @param path Path to the SSTable file.
    */
   SSTable(std::filesystem::path path) : path_(std::move(path)) {}
 
