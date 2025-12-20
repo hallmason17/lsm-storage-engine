@@ -24,24 +24,18 @@ public:
    * The filename is the current timestamp to ensure uniqueness.
    * @throws std::runtime_error if the file cannot be opened/created.
    */
-  SSTable() {
-    auto now = std::chrono::steady_clock::now().time_since_epoch();
-    path_ = std::to_string(now.count()) + ".sst";
-    if (!open_file()) {
-      throw std::runtime_error("Unable to open SSTable!");
-    }
-  }
+  SSTable() {}
+  /// New SSTable
+  static std::expected<SSTable, StorageError> create();
+  /// Existing
+  static std::expected<SSTable, StorageError> open(const std::filesystem::path);
 
   /**
    * @brief Opens an existing SSTable from the specified path.
    * @param path Path to the SSTable file.
    * @throws std::runtime_error if the file cannot be opened.
    */
-  SSTable(std::filesystem::path path) : path_(std::move(path)) {
-    if (!open_file()) {
-      throw std::runtime_error("Unable to open SSTable!");
-    }
-  }
+  SSTable(std::filesystem::path path) : path_(std::move(path)) {}
 
   ~SSTable() { close_file(); }
 

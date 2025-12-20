@@ -38,7 +38,8 @@ MemTable::flush_to_disk(const std::filesystem::path &path) {
     of.write(reinterpret_cast<const char *>(&keylen), sizeof(keylen));
     of.write(reinterpret_cast<const char *>(&valuelen), sizeof(valuelen));
 
-    of << key.data() << val.data();
+    of.write(key.data(), static_cast<long>(key.size()));
+    of.write(val.data(), static_cast<long>(val.size()));
   }
   if (!of) {
     return std::unexpected(StorageError::file_write(path));

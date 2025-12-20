@@ -27,6 +27,7 @@ private:
         std::filesystem::remove(entry.path());
       }
     }
+    std::filesystem::remove("lsm.meta");
   }
 };
 
@@ -78,9 +79,7 @@ TEST_F(LsmTreeTest, PutWritesToWal) {
 TEST_F(LsmTreeTest, DataRetrievableFromSSTableAfterFlush) {
   LsmTree lsm;
 
-  // Put enough data to trigger a flush (threshold is 256 bytes)
-  // Each entry is ~10 bytes, so ~30 entries should trigger flush
-  for (int i = 0; i < 30; ++i) {
+  for (int i = 0; i < lsm_constants::kMemTableFlushThreshold; ++i) {
     lsm.put("key" + std::to_string(i), "value" + std::to_string(i));
   }
 

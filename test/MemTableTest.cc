@@ -12,7 +12,10 @@ class MemTableFlushTest : public ::testing::Test {
 protected:
   std::filesystem::path test_path_ = "test_memtable_flush.sst";
 
-  void TearDown() override { std::filesystem::remove(test_path_); }
+  void TearDown() override {
+    std::filesystem::remove(test_path_);
+    std::filesystem::remove("lsm.meta");
+  }
 };
 
 TEST(MemTableTest, GetReturnsNulloptForMissingKey) {
@@ -119,7 +122,7 @@ TEST(MemTableTest, ClearResetsSize) {
 
 TEST(MemTableTest, ClearResetsShouldFlush) {
   MemTable table;
-  std::string large_value(300, 'x');
+  std::string large_value(lsm_constants::kMemTableFlushThreshold + 1, 'x');
   table.put("key", large_value);
   EXPECT_TRUE(table.should_flush());
 
@@ -175,7 +178,7 @@ TEST_F(MemTableFlushTest, FlushThenReadViaSSTablSingleEntry) {
   auto flush_result = table.flush_to_disk(test_path_);
   ASSERT_TRUE(flush_result.has_value());
 
-  SSTable sst(test_path_);
+  SSTable sst = SSTable::open(test_path_).value();
   auto get_result = sst.get("key1");
   ASSERT_TRUE(get_result.has_value()) << "SSTable get() returned error";
   ASSERT_TRUE(get_result->has_value()) << "Key not found in SSTable";
@@ -191,7 +194,7 @@ TEST_F(MemTableFlushTest, FlushThenReadViaSSTablMultipleEntries) {
   auto flush_result = table.flush_to_disk(test_path_);
   ASSERT_TRUE(flush_result.has_value());
 
-  SSTable sst(test_path_);
+  SSTable sst = SSTable::open(test_path_).value();
 
   auto r1 = sst.get("apple");
   ASSERT_TRUE(r1.has_value() && r1->has_value());
@@ -217,7 +220,7 @@ TEST_F(MemTableFlushTest, FlushPreservesKeyOrder) {
   auto flush_result = table.flush_to_disk(test_path_);
   ASSERT_TRUE(flush_result.has_value());
 
-  SSTable sst(test_path_);
+  SSTable sst = SSTable::open(test_path_).value();
 
   // Keys should be stored in sorted order (alpha, middle, zebra)
   auto r1 = sst.get("alpha");

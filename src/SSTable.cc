@@ -1,6 +1,8 @@
 #include "SSTable.h"
+#include "StorageError.h"
 #include <expected>
 #include <fcntl.h>
+#include <print>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <utility>
@@ -71,5 +73,22 @@ SSTable::get(std::string_view key) const {
     if (k == key)
       return val;
   }
+}
+std::expected<SSTable, StorageError> SSTable::create() {
+  SSTable sst;
+  auto now = std::chrono::steady_clock::now().time_since_epoch();
+  sst.path_ = std::to_string(now.count()) + ".sst";
+  if (!sst.open_file()) {
+    return std::unexpected(StorageError::file_open(sst.path_));
+  }
+  return sst;
+}
+std::expected<SSTable, StorageError>
+SSTable::open(const std::filesystem::path path) {
+  SSTable sst{path};
+  if (!sst.open_file()) {
+    return std::unexpected(StorageError::file_open(sst.path_.string()));
+  }
+  return sst;
 }
 } // namespace lsm_storage_engine

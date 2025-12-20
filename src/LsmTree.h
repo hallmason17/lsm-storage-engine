@@ -3,7 +3,6 @@
 #include "SSTable.h"
 #include "Wal.h"
 #include <atomic>
-#include <chrono>
 #include <filesystem>
 #include <optional>
 #include <print>
@@ -34,9 +33,11 @@ public:
       std::println("{}", result.error().message);
       throw std::runtime_error("Could not restore state from WAL!");
     }
-    if (!load_ssts(std::filesystem::current_path())) {
+    if (!load_ssts()) {
       throw std::runtime_error("Could not load SSTables!");
     }
+    std::println("LSM constructed! Memtable size: {}B, Num SSTs: {}",
+                 mem_table_.size(), ss_tables_.size());
   }
 
   /// Prevent the object from being copied
@@ -87,8 +88,8 @@ private:
   /// Basic RWLock for multithreaded access.
   std::shared_mutex rwlock_;
 
-  std::expected<void, StorageError>
-  load_ssts(const std::filesystem::path &path);
+  std::expected<void, StorageError> load_ssts();
+  std::expected<void, StorageError> update_meta(SSTable &sstable);
 
   // Timing stats - using atomics for thread-safe updates without holding the
   // main lock

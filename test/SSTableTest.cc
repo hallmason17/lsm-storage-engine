@@ -12,9 +12,13 @@ protected:
   void SetUp() override {
     // Clean up any leftover files from previous runs
     std::filesystem::remove(test_path_);
+    std::filesystem::remove("lsm.meta");
   }
 
-  void TearDown() override { std::filesystem::remove(test_path_); }
+  void TearDown() override {
+    std::filesystem::remove(test_path_);
+    std::filesystem::remove("lsm.meta");
+  }
 
   // Helper to write test data to SSTable via MemTable flush
   void write_test_data(
@@ -32,7 +36,7 @@ protected:
 
 TEST_F(SSTableTest, GetReturnsNulloptForMissingKey) {
   write_test_data({{"key1", "value1"}});
-  SSTable sst(test_path_);
+  SSTable sst = SSTable::open(test_path_).value();
 
   auto result = sst.get("nonexistent");
   ASSERT_TRUE(result.has_value()) << "get() returned error";
@@ -41,7 +45,7 @@ TEST_F(SSTableTest, GetReturnsNulloptForMissingKey) {
 
 TEST_F(SSTableTest, GetReturnsValueForExistingKey) {
   write_test_data({{"key1", "value1"}});
-  SSTable sst(test_path_);
+  SSTable sst = SSTable::open(test_path_).value();
 
   auto result = sst.get("key1");
   ASSERT_TRUE(result.has_value()) << "get() returned error";
@@ -52,7 +56,7 @@ TEST_F(SSTableTest, GetReturnsValueForExistingKey) {
 TEST_F(SSTableTest, GetMultipleKeys) {
   write_test_data(
       {{"apple", "red"}, {"banana", "yellow"}, {"grape", "purple"}});
-  SSTable sst(test_path_);
+  SSTable sst = SSTable::open(test_path_).value();
 
   auto r1 = sst.get("apple");
   ASSERT_TRUE(r1.has_value() && r1->has_value());
@@ -69,7 +73,7 @@ TEST_F(SSTableTest, GetMultipleKeys) {
 
 TEST_F(SSTableTest, GetEmptySSTable) {
   write_test_data({});
-  SSTable sst(test_path_);
+  SSTable sst = SSTable::open(test_path_).value();
 
   auto result = sst.get("anykey");
   ASSERT_TRUE(result.has_value()) << "get() returned error";
@@ -78,7 +82,7 @@ TEST_F(SSTableTest, GetEmptySSTable) {
 
 TEST_F(SSTableTest, GetEmptyKey) {
   write_test_data({{"", "empty_key_value"}});
-  SSTable sst(test_path_);
+  SSTable sst = SSTable::open(test_path_).value();
 
   auto result = sst.get("");
   ASSERT_TRUE(result.has_value()) << "get() returned error";
@@ -88,7 +92,7 @@ TEST_F(SSTableTest, GetEmptyKey) {
 
 TEST_F(SSTableTest, GetEmptyValue) {
   write_test_data({{"key_with_empty_value", ""}});
-  SSTable sst(test_path_);
+  SSTable sst = SSTable::open(test_path_).value();
 
   auto result = sst.get("key_with_empty_value");
   ASSERT_TRUE(result.has_value()) << "get() returned error";
@@ -98,7 +102,7 @@ TEST_F(SSTableTest, GetEmptyValue) {
 
 TEST_F(SSTableTest, GetCanBeCalledMultipleTimes) {
   write_test_data({{"key1", "value1"}, {"key2", "value2"}});
-  SSTable sst(test_path_);
+  SSTable sst = SSTable::open(test_path_).value();
 
   // Call get multiple times to ensure lseek resets properly
   for (int i = 0; i < 3; ++i) {
@@ -116,7 +120,7 @@ TEST_F(SSTableTest, GetCanBeCalledMultipleTimes) {
 
 TEST_F(SSTableTest, PathReturnsCorrectPath) {
   write_test_data({{"key", "value"}});
-  SSTable sst(test_path_);
+  SSTable sst = SSTable::open(test_path_).value();
 
   EXPECT_EQ(sst.path(), test_path_);
 }
@@ -127,7 +131,7 @@ TEST_F(SSTableTest, LargeKeyValue) {
   std::string large_key(1000, 'k');
   std::string large_value(5000, 'v');
   write_test_data({{large_key, large_value}});
-  SSTable sst(test_path_);
+  SSTable sst = SSTable::open(test_path_).value();
 
   auto result = sst.get(large_key);
   ASSERT_TRUE(result.has_value() && result->has_value());
@@ -138,7 +142,7 @@ TEST_F(SSTableTest, SpecialCharactersInKeyValue) {
   std::string key_with_special = "key\x01\x02\xFF";
   std::string value_with_special = "val\x00\x7F\xFE";
   write_test_data({{key_with_special, value_with_special}});
-  SSTable sst(test_path_);
+  SSTable sst = SSTable::open(test_path_).value();
 
   auto result = sst.get(key_with_special);
   ASSERT_TRUE(result.has_value() && result->has_value());
@@ -152,7 +156,7 @@ TEST_F(SSTableTest, ManyEntries) {
                          "value" + std::to_string(i));
   }
   write_test_data(entries);
-  SSTable sst(test_path_);
+  SSTable sst = SSTable::open(test_path_).value();
 
   // Check a few entries
   auto r0 = sst.get("key0");
