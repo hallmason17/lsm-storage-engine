@@ -2,6 +2,7 @@ build/
 
 *.log
 *.wal
+*.meta
 *.sst*
 compile_commands*
 
