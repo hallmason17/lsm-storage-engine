@@ -14,10 +14,10 @@ Implementing everything naively first and optimizing later.
 - [x] MemTable flush creates proper SSTables
 - [x] SSTable read path (scan SSTables when key not in memtable)
 - [x] WAL recovery (rebuild memtable on startup)
+- [x] SSTable tracking (which SSTables are part of the system?)
 
 ### Remaining for naive v1
 - [ ] SSTable compaction/garbage collection
-- [ ] SSTable tracking (which SSTables are part of the system?)
 - [ ] Delete operation (tombstone markers)
 
 ## Building
