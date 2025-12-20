@@ -28,22 +28,25 @@ public:
   /**
    * @brief Write a message to the log and sync to disk.
    * @param message The message to append to the log
+   * @return void on success, StorageError on failure.
    */
   std::expected<void, StorageError> write(std::string_view message);
 
   /**
    * @brief Get the path to the WAL.
-   * @returns The path where the log is located
+   * @return The path where the log is located
    */
   const std::filesystem::path &path() const { return path_; }
 
   /**
    * @brief Truncate the WAL to zero bytes.
+   * @return void on success, StorageError on failure.
    */
   std::expected<void, StorageError> clear();
 
   /**
    * @brief Sync buffered writes to disk.
+   * @return void on success, StorageError on failure.
    */
   std::expected<void, StorageError> sync();
 
@@ -51,7 +54,15 @@ private:
   std::filesystem::path path_;
   int fd_{-1};
 
+  /**
+   * @brief Opens the WAL file for writing.
+   * @return void on success, StorageError on failure.
+   */
   std::expected<void, StorageError> open_file();
+
+  /**
+   * @brief Closes the file descriptor if open.
+   */
   void close_file();
 };
 } // namespace lsm_storage_engine
