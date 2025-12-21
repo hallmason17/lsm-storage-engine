@@ -2,7 +2,6 @@
 #include "StorageError.h"
 #include <expected>
 #include <fcntl.h>
-#include <print>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <utility>
@@ -90,5 +89,27 @@ SSTable::open(const std::filesystem::path path) {
     return std::unexpected(StorageError::file_open(sst.path_.string()));
   }
   return sst;
+}
+
+std::expected<std::optional<std::pair<std::string, std::string>>, StorageError>
+SSTable::next() {
+  ::lseek(fd_, file_pos_, SEEK_SET);
+  uint32_t keylen{0};
+  uint32_t valuelen{0};
+
+  auto status = read_exact(fd_, &keylen, sizeof(keylen), path_);
+  if (!status)
+    return std::unexpected(status.error());
+  if (*status == ReadStatus::Eof)
+    return {{}};
+
+  auto _ = read_exact(fd_, &valuelen, sizeof(valuelen), path_);
+
+  std::string k(keylen, '\0');
+  std::string val(valuelen, '\0');
+  _ = read_exact(fd_, k.data(), keylen, path_);
+  _ = read_exact(fd_, val.data(), valuelen, path_);
+  file_pos_ += sizeof(keylen) + keylen + sizeof(valuelen) + valuelen;
+  return {{{k, val}}};
 }
 } // namespace lsm_storage_engine

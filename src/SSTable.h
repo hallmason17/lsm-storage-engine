@@ -65,9 +65,16 @@ public:
   std::expected<std::optional<std::string>, StorageError>
   get(std::string_view key) const;
 
+  std::expected<std::optional<std::pair<std::string, std::string>>,
+                StorageError>
+  next();
+
+  bool marked_for_delete_{false};
+
 private:
   std::filesystem::path path_;
   int fd_{-1};
+  off_t file_pos_{0};
   // TODO: Add a refcount
 
   /**

@@ -1,11 +1,14 @@
 #include "LsmTree.h"
 #include "MemTable.h"
+#include "SSTable.h"
+#include "StorageError.h"
+#include <algorithm>
 #include <chrono>
+#include <expected>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <optional>
-#include <print>
 #include <ranges>
 #include <shared_mutex>
 #include <stdexcept>
@@ -69,6 +72,12 @@ void LsmTree::put(const std::string &key, const std::string &value) {
       }
       ss_tables_.push_back(std::move(sst));
     }
+    auto res = compact_ssts();
+    if (!res) {
+      throw std::runtime_error(
+          "Failed to compact SSTs: " + res.error().message + ": " +
+          res.error().path.string());
+    }
   }
 
   auto end = std::chrono::high_resolution_clock::now();
@@ -116,6 +125,82 @@ std::expected<void, StorageError> LsmTree::update_meta(SSTable &sstable) {
   if (!metafile.good()) {
     return std::unexpected(StorageError::file_write("lsm.meta"));
   }
+  return {};
+}
+
+void LsmTree::write_sst_entry(
+    std::ofstream &out, const std::pair<std::string, std::string> &entry) {
+  auto keylen = static_cast<uint32_t>(entry.first.size());
+  auto valuelen = static_cast<uint32_t>(entry.second.size());
+
+  out.write(reinterpret_cast<const char *>(&keylen), sizeof(keylen));
+  out.write(reinterpret_cast<const char *>(&valuelen), sizeof(valuelen));
+  out.write(entry.first.data(),
+            static_cast<std::streamsize>(entry.first.size()));
+  out.write(entry.second.data(),
+            static_cast<std::streamsize>(entry.second.size()));
+}
+
+std::expected<void, StorageError> LsmTree::compact_ssts() {
+  // some random number for testing
+  // TODO: come up with a real compaction trigger
+  if (ss_tables_.size() < 4) {
+    return {};
+  }
+  std::vector<SSTable> new_ssts;
+  for (size_t i = 0; i + 1 < ss_tables_.size(); i += 2) {
+    // Make a new sst
+    auto sst = SSTable::create();
+    if (!sst) {
+      return std::unexpected(
+          StorageError::file_open("failed to create SSTable"));
+    }
+    std::ofstream of(sst->path(), std::ios::binary | std::ios::app);
+    if (!of.good()) {
+      return std::unexpected(StorageError::file_open(sst->path()));
+    }
+    auto lhs = ss_tables_[i].next();
+    auto rhs = ss_tables_[i + 1].next();
+    // merge sort combine
+    while (lhs->has_value() || rhs->has_value()) {
+      if (!lhs->has_value() && rhs->has_value()) {
+        write_sst_entry(of, rhs->value());
+        rhs = ss_tables_[i + 1].next();
+      } else if (!rhs->has_value() && lhs->has_value()) {
+        write_sst_entry(of, lhs->value());
+        lhs = ss_tables_[i].next();
+      } else if (lhs->value().first < rhs->value().first) {
+        write_sst_entry(of, lhs->value());
+        lhs = ss_tables_[i].next();
+      } else if (rhs->value().first < lhs->value().first) {
+        write_sst_entry(of, rhs->value());
+        rhs = ss_tables_[i + 1].next();
+      } else {
+        // Keys are equal - keep the newer value (rhs)
+        write_sst_entry(of, rhs->value());
+        lhs = ss_tables_[i].next();
+        rhs = ss_tables_[i + 1].next();
+      }
+    }
+    ss_tables_[i].marked_for_delete_ = true;
+    ss_tables_[i + 1].marked_for_delete_ = true;
+    new_ssts.push_back(std::move(sst.value()));
+  }
+  for (auto &sst : ss_tables_) {
+    if (sst.marked_for_delete_) {
+      std::filesystem::remove(sst.path());
+    }
+  }
+  ss_tables_ = std::move(new_ssts);
+
+  std::filesystem::resize_file("lsm.meta", 0);
+
+  std::ranges::for_each(ss_tables_, [&](SSTable &sst) {
+    auto res = update_meta(sst);
+    if (!res) {
+      std::unexpected(StorageError::file_write("lsm.meta"));
+    }
+  });
   return {};
 }
 } // namespace lsm_storage_engine

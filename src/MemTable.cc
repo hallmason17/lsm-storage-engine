@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <expected>
 #include <fstream>
-#include <print>
 #include <sstream>
 namespace lsm_storage_engine {
 

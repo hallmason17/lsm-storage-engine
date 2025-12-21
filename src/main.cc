@@ -19,7 +19,7 @@ int main() {
     auto key = "key" + std::to_string(i);
     auto val = lsm.get(key);
     if (val) {
-      //      std::println("{}", *val);
+      std::println("{}", *val);
     }
   }
   auto s = lsm.stats();

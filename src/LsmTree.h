@@ -88,8 +88,28 @@ private:
   /// Basic RWLock for multithreaded access.
   std::shared_mutex rwlock_;
 
+  /**
+   * @brief Load SSTables associated with this LSM-tree into the ss_tables_
+   * vector.
+   * @return void on success, StorageError on failure.
+   */
   std::expected<void, StorageError> load_ssts();
+
+  /**
+   * @brief Update the LSM-tree meta file with SSTable to add it to the
+   * database.
+   * @return void on success, StorageError on failure.
+   */
   std::expected<void, StorageError> update_meta(SSTable &sstable);
+
+  std::expected<void, StorageError> compact_ssts();
+
+  /**
+   * @brief Write a key-value entry in SSTable binary format.
+   * Format: [keylen:u32][valuelen:u32][key:bytes][value:bytes]
+   */
+  static void write_sst_entry(std::ofstream &out,
+                              const std::pair<std::string, std::string> &entry);
 
   // Timing stats - using atomics for thread-safe updates without holding the
   // main lock
