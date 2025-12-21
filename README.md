@@ -15,9 +15,9 @@ Implementing everything naively first and optimizing later.
 - [x] SSTable read path (scan SSTables when key not in memtable)
 - [x] WAL recovery (rebuild memtable on startup)
 - [x] SSTable tracking (which SSTables are part of the system?)
+- [x] SSTable compaction/garbage collection
 
 ### Remaining for naive v1
-- [ ] SSTable compaction/garbage collection
 - [ ] Delete operation (tombstone markers)
 
 ## Building
