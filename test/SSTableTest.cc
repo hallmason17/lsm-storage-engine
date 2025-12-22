@@ -24,16 +24,24 @@ protected:
   // Helper to write test data to SSTable via MemTable flush
   void write_test_data(
       const std::vector<std::pair<std::string, std::string>> &entries) {
+<<<<<<< HEAD
     auto sst = SSTable::create(test_path_);
     if (!sst) {
       std::println("{}", sst.error().message + sst.error().path.string());
     }
     ASSERT_TRUE(sst.has_value()) << "Failed to create SSTable";
+=======
+    auto sst = SSTable::open(test_path_).value();
+>>>>>>> dac5614 (compaction bug fix, some refactoring in lsmtree put for clarity)
     MemTable mem;
     for (const auto &[key, value] : entries) {
       mem.put(key, value);
     }
+<<<<<<< HEAD
     auto result = mem.flush_to_sst(sst.value());
+=======
+    auto result = mem.flush_to_sst(sst);
+>>>>>>> dac5614 (compaction bug fix, some refactoring in lsmtree put for clarity)
     ASSERT_TRUE(result.has_value()) << "Failed to flush memtable to disk";
   }
 };

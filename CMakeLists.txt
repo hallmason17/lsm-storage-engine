@@ -31,7 +31,12 @@ add_library(lsm_lib
 
 target_include_directories(lsm_lib PUBLIC src)
 
+<<<<<<< HEAD
 target_link_libraries(lsm_lib PRIVATE xxHash::xxhash)
+=======
+find_package(ZLIB REQUIRED)
+target_link_libraries(lsm_lib PRIVATE ZLIB::ZLIB)
+>>>>>>> dac5614 (compaction bug fix, some refactoring in lsmtree put for clarity)
 
 # Warnings and errors
 target_compile_options(lsm_lib PRIVATE

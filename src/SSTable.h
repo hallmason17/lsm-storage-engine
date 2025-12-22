@@ -84,8 +84,13 @@ public:
   std::expected<std::optional<std::pair<std::string, std::string>>,
                 StorageError>
   read_entry() const;
+<<<<<<< HEAD
   std::expected<size_t, StorageError>
   write_entry(const std::string_view key, const std::string_view value) const;
+=======
+  std::expected<void, StorageError> write_entry(const std::string_view key,
+                                                const std::string_view value);
+>>>>>>> dac5614 (compaction bug fix, some refactoring in lsmtree put for clarity)
 
   bool marked_for_delete_{false};
 

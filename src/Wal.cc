@@ -53,6 +53,7 @@ std::expected<void, StorageError> Wal::write(std::string_view key,
   auto keylen = static_cast<uint32_t>(key.size());
   auto valuelen = static_cast<uint32_t>(value.size());
 
+<<<<<<< HEAD
   auto append = [&write_buffer](const void *d, size_t len) {
     auto data = reinterpret_cast<const std::byte *>(d);
     write_buffer.insert(write_buffer.end(), data, data + len);
@@ -73,6 +74,20 @@ std::expected<void, StorageError> Wal::write(std::string_view key,
     return std::unexpected(StorageError::file_write(path()));
   }
   return {};
+=======
+  assert(fd_ > -1);
+
+  while (remaining > 0) {
+    ssize_t written = ::write(fd_, data, remaining);
+    if (written == -1) {
+      return std::unexpected{StorageError::file_write(path())};
+    }
+    data += written;
+    remaining -= static_cast<size_t>(written);
+  }
+
+  return sync();
+>>>>>>> dac5614 (compaction bug fix, some refactoring in lsmtree put for clarity)
 }
 
 std::expected<void, StorageError> Wal::sync() const {
@@ -82,7 +97,11 @@ std::expected<void, StorageError> Wal::sync() const {
   return {};
 }
 
+<<<<<<< HEAD
 std::expected<void, StorageError> Wal::clear() const {
+=======
+std::expected<void, StorageError> Wal::clear() {
+>>>>>>> dac5614 (compaction bug fix, some refactoring in lsmtree put for clarity)
   if (::ftruncate(fd_, 0) == -1) {
     return std::unexpected{StorageError::file_write(path())};
   }
