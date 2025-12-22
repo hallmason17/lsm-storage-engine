@@ -3,21 +3,33 @@
 #include "utils/CheckSum.h"
 #include <cassert>
 #include <cstdint>
+#include <cstring>
 #include <expected>
 #include <fcntl.h>
+#include <filesystem>
+#include <print>
+#include <span>
+#include <string>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <utility>
 namespace lsm_storage_engine {
 
 SSTable::SSTable(SSTable &&other) noexcept
-    : path_{std::move(other.path_)}, fd_{std::exchange(other.fd_, -1)} {}
+    : path_{std::move(other.path_)}, fd_{std::exchange(other.fd_, -1)},
+      file_pos_{std::exchange(other.file_pos_, 0)},
+      mapped_data_{std::exchange(other.mapped_data_, {})},
+      file_size_{std::exchange(other.file_size_, 0)} {}
 
 SSTable &SSTable::operator=(SSTable &&other) noexcept {
   if (this != &other) {
     close_file();
     path_ = std::move(other.path_);
     fd_ = std::exchange(other.fd_, -1);
+    mapped_data_ = std::exchange(other.mapped_data_, {});
+    file_pos_ = std::exchange(other.file_pos_, 0);
+    file_size_ = std::exchange(other.file_size_, 0);
   }
   return *this;
 }
@@ -34,6 +46,9 @@ void SSTable::close_file() {
   if (fd_ != -1) {
     ::close(fd_);
     fd_ = -1;
+  }
+  if (mapped_data_.data() != nullptr) {
+    ::munmap(mapped_data_.data(), file_size_);
   }
 }
 
@@ -83,12 +98,61 @@ SSTable::open(const std::filesystem::path path) {
   if (!sst.open_file()) {
     return std::unexpected(StorageError::file_open(sst.path_.string()));
   }
+  sst.file_size_ = std::filesystem::file_size(path);
+  if (sst.file_size_ > 0) {
+    void *addr =
+        ::mmap(NULL, sst.file_size_, PROT_READ, MAP_PRIVATE, sst.fd_, 0);
+    if (addr == MAP_FAILED) {
+      return std::unexpected(StorageError::file_read(sst.path_.string()));
+    }
+    sst.mapped_data_ =
+        std::span<std::byte>{static_cast<std::byte *>(addr), sst.file_size_};
+  }
   return sst;
 }
 
 std::expected<std::optional<std::pair<std::string, std::string>>, StorageError>
+SSTable::read_entry_mmap() const {
+  if (mapped_data_.data() == nullptr) {
+    return std::unexpected(StorageError::file_open(path()));
+  }
+  if (static_cast<size_t>(file_pos_) >= file_size_) {
+    return std::nullopt;
+  }
+  uint32_t keylen{0};
+  uint32_t valuelen{0};
+  uint32_t file_checksum{0};
+  ::memcpy(&keylen, mapped_data_.data() + file_pos_, sizeof(keylen));
+  ::memcpy(&valuelen, mapped_data_.data() + file_pos_ + sizeof(uint32_t),
+           sizeof(valuelen));
+  std::string k(keylen, '\0');
+  std::string val(valuelen, '\0');
+  ::memcpy(k.data(), mapped_data_.data() + file_pos_ + 2 * sizeof(uint32_t),
+           keylen);
+  ::memcpy(val.data(),
+           mapped_data_.data() + file_pos_ + 2 * sizeof(uint32_t) + k.size(),
+           valuelen);
+  ::memcpy(&file_checksum,
+           mapped_data_.data() + file_pos_ + 2 * sizeof(uint32_t) + k.size() +
+               val.size(),
+           sizeof(file_checksum));
+  return {{{std::move(k), std::move(val)}}};
+}
+
+std::expected<std::optional<std::pair<std::string, std::string>>, StorageError>
 SSTable::next() {
-  auto entry = read_entry();
+  if (mapped_data_.data() == nullptr) {
+    file_size_ = std::filesystem::file_size(path());
+    if (file_size_ > 0) {
+      void *addr = ::mmap(NULL, file_size_, PROT_READ, MAP_PRIVATE, fd_, 0);
+      if (addr == MAP_FAILED) {
+        return std::unexpected(StorageError::file_read(path_.string()));
+      }
+      mapped_data_ =
+          std::span<std::byte>{static_cast<std::byte *>(addr), file_size_};
+    }
+  }
+  auto entry = read_entry_mmap();
   if (!entry)
     return std::unexpected(StorageError::file_read(path()));
   if (!entry->has_value())

@@ -3,6 +3,7 @@
 #include <expected>
 #include <filesystem>
 #include <optional>
+#include <span>
 namespace lsm_storage_engine {
 
 /**
@@ -74,12 +75,18 @@ public:
   std::expected<void, StorageError> write_entry(const std::string_view key,
                                                 const std::string_view value);
 
+  std::expected<std::optional<std::pair<std::string, std::string>>,
+                StorageError>
+  read_entry_mmap() const;
+
   bool marked_for_delete_{false};
 
 private:
   std::filesystem::path path_;
   int fd_{-1};
   off_t file_pos_{0};
+  std::span<std::byte> mapped_data_;
+  size_t file_size_{0};
   // TODO: Add a refcount
 
   /**
