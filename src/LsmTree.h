@@ -102,7 +102,9 @@ private:
    */
   std::expected<void, StorageError> update_meta(SSTable &sstable);
 
-  std::expected<void, StorageError> compact_ssts();
+  std::expected<void, StorageError> maybe_compact();
+
+  std::expected<void, StorageError> flush_memtable();
 
   /**
    * @brief Write a key-value entry in SSTable binary format.

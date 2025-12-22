@@ -45,6 +45,23 @@ std::optional<std::string> LsmTree::get(const std::string_view key) {
 
   return result;
 }
+
+std::expected<void, StorageError> LsmTree::flush_memtable() {
+  SSTable sst = SSTable::create().value();
+  auto update_result = update_meta(sst);
+  if (!update_result) {
+    return std::unexpected(StorageError::file_write("lsm.meta"));
+  }
+  if (!mem_table_.flush_to_disk(sst.path())) {
+    return std::unexpected(StorageError::file_write(sst.path()));
+  }
+  mem_table_.clear();
+  if (!wal_.clear()) {
+    return std::unexpected(StorageError::file_write(wal_.path()));
+  }
+  ss_tables_.push_back(std::move(sst));
+  return {};
+}
 void LsmTree::put(const std::string &key, const std::string &value) {
   auto start = std::chrono::high_resolution_clock::now();
 
@@ -58,25 +75,18 @@ void LsmTree::put(const std::string &key, const std::string &value) {
     }
     mem_table_.put(key, value);
     if (mem_table_.should_flush()) {
-      SSTable sst = SSTable::create().value();
-      auto res = update_meta(sst);
-      if (!res) {
-        throw std::runtime_error("Could not add SSTable to meta file!");
+      auto flush_result = flush_memtable();
+      if (!flush_result) {
+        throw std::runtime_error(
+            "Failed to create SST! Error: " + flush_result.error().message +
+            " " + flush_result.error().path.string());
       }
-      if (!mem_table_.flush_to_disk(sst.path())) {
-        throw std::runtime_error("Failed to write memtable to disk!");
-      }
-      mem_table_.clear();
-      if (!wal_.clear()) {
-        throw std::runtime_error("Could not empty the WAL!");
-      }
-      ss_tables_.push_back(std::move(sst));
     }
-    auto res = compact_ssts();
-    if (!res) {
+    auto compact_result = maybe_compact();
+    if (!compact_result) {
       throw std::runtime_error(
-          "Failed to compact SSTs: " + res.error().message + ": " +
-          res.error().path.string());
+          "Failed to compact SSTs: " + compact_result.error().message + ": " +
+          compact_result.error().path.string());
     }
   }
 
@@ -141,7 +151,15 @@ void LsmTree::write_sst_entry(
             static_cast<std::streamsize>(entry.second.size()));
 }
 
-std::expected<void, StorageError> LsmTree::compact_ssts() {
+static void cleanup_sst_files(std::vector<SSTable> &ss_tables) {
+  for (auto &sst : ss_tables) {
+    if (sst.marked_for_delete_) {
+      std::filesystem::remove(sst.path());
+    }
+  }
+}
+
+std::expected<void, StorageError> LsmTree::maybe_compact() {
   // some random number for testing
   // TODO: come up with a real compaction trigger
   if (ss_tables_.size() < 4) {
@@ -186,21 +204,17 @@ std::expected<void, StorageError> LsmTree::compact_ssts() {
     ss_tables_[i + 1].marked_for_delete_ = true;
     new_ssts.push_back(std::move(sst.value()));
   }
-  for (auto &sst : ss_tables_) {
-    if (sst.marked_for_delete_) {
-      std::filesystem::remove(sst.path());
-    }
-  }
+  cleanup_sst_files(ss_tables_);
   ss_tables_ = std::move(new_ssts);
 
   std::filesystem::resize_file("lsm.meta", 0);
 
-  std::ranges::for_each(ss_tables_, [&](SSTable &sst) {
+  for (auto &sst : ss_tables_) {
     auto res = update_meta(sst);
     if (!res) {
-      std::unexpected(StorageError::file_write("lsm.meta"));
+      return std::unexpected(res.error());
     }
-  });
+  }
   return {};
 }
 } // namespace lsm_storage_engine
