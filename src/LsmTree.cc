@@ -2,7 +2,7 @@
 #include "MemTable.h"
 #include "SSTable.h"
 #include "StorageError.h"
-#include <algorithm>
+#include "utils/CheckSum.h"
 #include <chrono>
 #include <expected>
 #include <filesystem>
@@ -24,7 +24,7 @@ std::optional<std::string> LsmTree::get(const std::string_view key) {
     if (auto val = mem_table_.get(key)) {
       result = *val;
     } else {
-      for (const auto &sst : ss_tables_ | std::views::reverse) {
+      for (auto &sst : ss_tables_ | std::views::reverse) {
         auto res = sst.get(key);
 
         // Check the expected and the optional!!!
@@ -47,20 +47,26 @@ std::optional<std::string> LsmTree::get(const std::string_view key) {
 }
 
 std::expected<void, StorageError> LsmTree::flush_memtable() {
-  SSTable sst = SSTable::create().value();
-  auto update_result = update_meta(sst);
-  if (!update_result) {
-    return std::unexpected(StorageError::file_write("lsm.meta"));
-  }
-  if (!mem_table_.flush_to_disk(sst.path())) {
-    return std::unexpected(StorageError::file_write(sst.path()));
-  }
-  mem_table_.clear();
-  if (!wal_.clear()) {
-    return std::unexpected(StorageError::file_write(wal_.path()));
-  }
-  ss_tables_.push_back(std::move(sst));
-  return {};
+  auto result =
+      SSTable::create()
+          .and_then([&](SSTable sst) {
+            return update_meta(sst).transform([&] { return std::move(sst); });
+          })
+          .and_then([&](SSTable sst) -> std::expected<SSTable, StorageError> {
+            if (!mem_table_.flush_to_sst(sst)) {
+              return std::unexpected(StorageError::file_write(sst.path()));
+            }
+            return sst;
+          })
+          .and_then([&](SSTable sst) -> std::expected<void, StorageError> {
+            mem_table_.clear();
+            if (!wal_.clear()) {
+              return std::unexpected(StorageError::file_write(wal_.path()));
+            }
+            ss_tables_.push_back(std::move(sst));
+            return {};
+          });
+  return result;
 }
 void LsmTree::put(const std::string &key, const std::string &value) {
   auto start = std::chrono::high_resolution_clock::now();
@@ -103,8 +109,13 @@ std::expected<void, StorageError> LsmTree::load_ssts() {
     std::string line;
     while (std::getline(metafile, line)) {
       if (line.contains(".sst")) {
-        SSTable sst = SSTable::open(std::string(line)).value();
-        ss_tables_.emplace_back(std::move(sst));
+        auto sst =
+            SSTable::open(std::string(line))
+                .and_then(
+                    [&](SSTable sst) -> std::expected<void, StorageError> {
+                      ss_tables_.emplace_back(std::move(sst));
+                      return {};
+                    });
       }
     }
   }
@@ -138,19 +149,6 @@ std::expected<void, StorageError> LsmTree::update_meta(SSTable &sstable) {
   return {};
 }
 
-void LsmTree::write_sst_entry(
-    std::ofstream &out, const std::pair<std::string, std::string> &entry) {
-  auto keylen = static_cast<uint32_t>(entry.first.size());
-  auto valuelen = static_cast<uint32_t>(entry.second.size());
-
-  out.write(reinterpret_cast<const char *>(&keylen), sizeof(keylen));
-  out.write(reinterpret_cast<const char *>(&valuelen), sizeof(valuelen));
-  out.write(entry.first.data(),
-            static_cast<std::streamsize>(entry.first.size()));
-  out.write(entry.second.data(),
-            static_cast<std::streamsize>(entry.second.size()));
-}
-
 static void cleanup_sst_files(std::vector<SSTable> &ss_tables) {
   for (auto &sst : ss_tables) {
     if (sst.marked_for_delete_) {
@@ -173,29 +171,25 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
       return std::unexpected(
           StorageError::file_open("failed to create SSTable"));
     }
-    std::ofstream of(sst->path(), std::ios::binary | std::ios::app);
-    if (!of.good()) {
-      return std::unexpected(StorageError::file_open(sst->path()));
-    }
     auto lhs = ss_tables_[i].next();
     auto rhs = ss_tables_[i + 1].next();
     // merge sort combine
-    while (lhs->has_value() || rhs->has_value()) {
+    while ((lhs && rhs) && (lhs->has_value() || rhs->has_value())) {
       if (!lhs->has_value() && rhs->has_value()) {
-        write_sst_entry(of, rhs->value());
+        sst->write_entry(rhs->value().first, rhs->value().second);
         rhs = ss_tables_[i + 1].next();
       } else if (!rhs->has_value() && lhs->has_value()) {
-        write_sst_entry(of, lhs->value());
+        sst->write_entry(lhs->value().first, lhs->value().second);
         lhs = ss_tables_[i].next();
       } else if (lhs->value().first < rhs->value().first) {
-        write_sst_entry(of, lhs->value());
+        sst->write_entry(lhs->value().first, lhs->value().second);
         lhs = ss_tables_[i].next();
       } else if (rhs->value().first < lhs->value().first) {
-        write_sst_entry(of, rhs->value());
+        sst->write_entry(rhs->value().first, rhs->value().second);
         rhs = ss_tables_[i + 1].next();
       } else {
         // Keys are equal - keep the newer value (rhs)
-        write_sst_entry(of, rhs->value());
+        sst->write_entry(rhs->value().first, rhs->value().second);
         lhs = ss_tables_[i].next();
         rhs = ss_tables_[i + 1].next();
       }
@@ -217,4 +211,5 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
   }
   return {};
 }
+void LsmTree::rm(const std::string &key) { put(key, ""); }
 } // namespace lsm_storage_engine

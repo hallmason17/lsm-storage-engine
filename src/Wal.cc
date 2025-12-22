@@ -1,5 +1,6 @@
 #include "Wal.h"
 #include "StorageError.h"
+#include <cassert>
 #include <expected>
 #include <fcntl.h>
 #include <stdexcept>
@@ -30,9 +31,6 @@ Wal &Wal::operator=(Wal &&other) noexcept {
 }
 
 std::expected<void, StorageError> Wal::open_file() {
-  // O_WRONLY: write only
-  // O_CREAT: create if doesn't exist
-  // O_APPEND: all writes go to end of file
   fd_ = ::open(path_.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
   if (fd_ == -1) {
     return std::unexpected{StorageError::file_open(path())};
@@ -51,6 +49,8 @@ std::expected<void, StorageError> Wal::write(std::string_view message) {
   const char *data = message.data();
   size_t remaining = message.size();
 
+  assert(fd_ > -1);
+
   while (remaining > 0) {
     ssize_t written = ::write(fd_, data, remaining);
     if (written == -1) {
@@ -60,7 +60,6 @@ std::expected<void, StorageError> Wal::write(std::string_view message) {
     remaining -= static_cast<size_t>(written);
   }
 
-  // Ensure data reaches disk
   return sync();
 }
 
@@ -72,12 +71,9 @@ std::expected<void, StorageError> Wal::sync() {
 }
 
 std::expected<void, StorageError> Wal::clear() {
-  // Truncate file to zero bytes
   if (::ftruncate(fd_, 0) == -1) {
     return std::unexpected{StorageError::file_write(path())};
   }
-  // With O_APPEND, the write position automatically goes to end (which is now
-  // 0)
   return {};
 }
 

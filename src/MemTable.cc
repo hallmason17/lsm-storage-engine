@@ -1,8 +1,10 @@
 #include "MemTable.h"
 #include "StorageError.h"
-#include <cstdint>
+#include "utils/CheckSum.h"
+#include <cassert>
 #include <expected>
 #include <fstream>
+#include <ios>
 #include <sstream>
 namespace lsm_storage_engine {
 
@@ -16,6 +18,9 @@ std::optional<std::string> MemTable::get(const std::string_view key) const {
 void MemTable::put(std::string key, std::string value) {
   if (map_.contains(key)) {
     const std::string_view oldval = map_.find(key)->second;
+
+    assert(size_ >= oldval.size());
+
     size_ -= oldval.size();
     size_ += value.size();
   } else {
@@ -24,24 +29,12 @@ void MemTable::put(std::string key, std::string value) {
   map_.insert_or_assign(std::move(key), std::move(value));
 }
 
-std::expected<void, StorageError>
-MemTable::flush_to_disk(const std::filesystem::path &path) {
-  std::ofstream of(path, std::ios::binary | std::ios::app);
-  if (!of) {
-    return std::unexpected(StorageError::file_open(path));
-  }
+std::expected<void, StorageError> MemTable::flush_to_sst(SSTable &sst) {
   for (const auto &[key, val] : map_) {
-    auto keylen = static_cast<uint32_t>(key.size());
-    auto valuelen = static_cast<uint32_t>(val.size());
-
-    of.write(reinterpret_cast<const char *>(&keylen), sizeof(keylen));
-    of.write(reinterpret_cast<const char *>(&valuelen), sizeof(valuelen));
-
-    of.write(key.data(), static_cast<long>(key.size()));
-    of.write(val.data(), static_cast<long>(val.size()));
-  }
-  if (!of) {
-    return std::unexpected(StorageError::file_write(path));
+    auto result = sst.write_entry(key, val);
+    if (!result) {
+      return std::unexpected(result.error());
+    }
   }
   return {};
 }
