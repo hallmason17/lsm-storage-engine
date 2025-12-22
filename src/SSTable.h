@@ -3,7 +3,6 @@
 #include <expected>
 #include <filesystem>
 #include <optional>
-#include <stdexcept>
 namespace lsm_storage_engine {
 
 /**
@@ -63,11 +62,17 @@ public:
    *         on I/O failure.
    */
   std::expected<std::optional<std::string>, StorageError>
-  get(std::string_view key) const;
+  get(std::string_view key);
 
   std::expected<std::optional<std::pair<std::string, std::string>>,
                 StorageError>
   next();
+
+  std::expected<std::optional<std::pair<std::string, std::string>>,
+                StorageError>
+  read_entry() const;
+  std::expected<void, StorageError> write_entry(const std::string_view key,
+                                                const std::string_view value);
 
   bool marked_for_delete_{false};
 

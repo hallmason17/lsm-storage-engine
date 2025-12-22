@@ -20,6 +20,9 @@ add_library(lsm_lib
 
 target_include_directories(lsm_lib PUBLIC src)
 
+find_package(ZLIB REQUIRED)
+target_link_libraries(lsm_lib PRIVATE ZLIB::ZLIB)
+
 # Warnings and errors
 target_compile_options(lsm_lib PRIVATE
   -Wall
