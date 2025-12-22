@@ -23,11 +23,12 @@ protected:
   // Helper to write test data to SSTable via MemTable flush
   void write_test_data(
       const std::vector<std::pair<std::string, std::string>> &entries) {
+    auto sst = SSTable::open(test_path_).value();
     MemTable mem;
     for (const auto &[key, value] : entries) {
       mem.put(key, value);
     }
-    auto result = mem.flush_to_disk(test_path_);
+    auto result = mem.flush_to_sst(sst);
     ASSERT_TRUE(result.has_value()) << "Failed to flush memtable to disk";
   }
 };
