@@ -36,8 +36,8 @@ public:
     if (!load_ssts()) {
       throw std::runtime_error("Could not load SSTables!");
     }
-    std::println("LSM constructed! Memtable size: {}B, Num SSTs: {}",
-                 mem_table_.size(), ss_tables_.size());
+    //    std::println("LSM constructed! Memtable size: {}B, Num SSTs: {}",
+    //                mem_table_.size(), ss_tables_.size());
   }
 
   /// Prevent the object from being copied
