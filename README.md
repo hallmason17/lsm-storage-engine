@@ -19,8 +19,17 @@ Implementing everything naively first and optimizing later.
 - [x] Delete operation (tombstone markers)
 - [x] Store checksums to ensure data integrity
 
+
 ### Remaining for naive v1
 Complete!
+
+### Optimizations
+- [] mmap SSTables
+- [] SSTable metadata
+- [] SSTable block formatting
+- [] Bloom filters
+- [] More intentional compaction strategy
+
 ## Building and Running Tests
 ```bash
 mkdir -p build && cd build
