@@ -134,18 +134,20 @@ TEST(MemTableTest, ClearResetsShouldFlush) {
 
 TEST_F(MemTableFlushTest, FlushToDiskSucceeds) {
   MemTable table;
+  auto sst = SSTable::open(test_path_).value();
   table.put("key1", "value1");
 
-  auto result = table.flush_to_disk(test_path_);
+  auto result = table.flush_to_sst(sst);
   EXPECT_TRUE(result.has_value());
   EXPECT_TRUE(std::filesystem::exists(test_path_));
 }
 
 TEST_F(MemTableFlushTest, FlushToDiskCreatesFile) {
   MemTable table;
+  auto sst = SSTable::open(test_path_).value();
   table.put("foo", "bar");
 
-  auto result = table.flush_to_disk(test_path_);
+  auto result = table.flush_to_sst(sst);
   ASSERT_TRUE(result.has_value());
 
   std::ifstream file(test_path_, std::ios::binary);
@@ -157,15 +159,16 @@ TEST_F(MemTableFlushTest, FlushToDiskReturnsErrorForInvalidPath) {
   table.put("key", "value");
 
   std::filesystem::path invalid_path = "/nonexistent/directory/file.sst";
-  auto result = table.flush_to_disk(invalid_path);
+  auto sst_result = SSTable::open(invalid_path);
 
-  EXPECT_FALSE(result.has_value());
-  EXPECT_EQ(result.error().kind, StorageError::Kind::FileOpen);
+  EXPECT_FALSE(sst_result.has_value());
+  EXPECT_EQ(sst_result.error().kind, StorageError::Kind::FileOpen);
 }
 
 TEST_F(MemTableFlushTest, FlushEmptyTableSucceeds) {
   MemTable table;
-  auto result = table.flush_to_disk(test_path_);
+  auto sst = SSTable::open(test_path_).value();
+  auto result = table.flush_to_sst(sst);
   EXPECT_TRUE(result.has_value());
 }
 
@@ -175,11 +178,12 @@ TEST_F(MemTableFlushTest, FlushThenReadViaSSTablSingleEntry) {
   MemTable table;
   table.put("key1", "value1");
 
-  auto flush_result = table.flush_to_disk(test_path_);
+  auto sst = SSTable::open(test_path_).value();
+  auto flush_result = table.flush_to_sst(sst);
   ASSERT_TRUE(flush_result.has_value());
 
-  SSTable sst = SSTable::open(test_path_).value();
-  auto get_result = sst.get("key1");
+  SSTable sst_read = SSTable::open(test_path_).value();
+  auto get_result = sst_read.get("key1");
   ASSERT_TRUE(get_result.has_value()) << "SSTable get() returned error";
   ASSERT_TRUE(get_result->has_value()) << "Key not found in SSTable";
   EXPECT_EQ(**get_result, "value1");
@@ -191,20 +195,21 @@ TEST_F(MemTableFlushTest, FlushThenReadViaSSTablMultipleEntries) {
   table.put("banana", "yellow");
   table.put("cherry", "red");
 
-  auto flush_result = table.flush_to_disk(test_path_);
+  auto sst = SSTable::open(test_path_).value();
+  auto flush_result = table.flush_to_sst(sst);
   ASSERT_TRUE(flush_result.has_value());
 
-  SSTable sst = SSTable::open(test_path_).value();
+  SSTable sst_read = SSTable::open(test_path_).value();
 
-  auto r1 = sst.get("apple");
+  auto r1 = sst_read.get("apple");
   ASSERT_TRUE(r1.has_value() && r1->has_value());
   EXPECT_EQ(**r1, "red");
 
-  auto r2 = sst.get("banana");
+  auto r2 = sst_read.get("banana");
   ASSERT_TRUE(r2.has_value() && r2->has_value());
   EXPECT_EQ(**r2, "yellow");
 
-  auto r3 = sst.get("cherry");
+  auto r3 = sst_read.get("cherry");
   ASSERT_TRUE(r3.has_value() && r3->has_value());
   EXPECT_EQ(**r3, "red");
 }
@@ -217,17 +222,18 @@ TEST_F(MemTableFlushTest, FlushPreservesKeyOrder) {
   table.put("alpha", "a");
   table.put("middle", "m");
 
-  auto flush_result = table.flush_to_disk(test_path_);
+  auto sst = SSTable::open(test_path_).value();
+  auto flush_result = table.flush_to_sst(sst);
   ASSERT_TRUE(flush_result.has_value());
 
-  SSTable sst = SSTable::open(test_path_).value();
+  SSTable sst_read = SSTable::open(test_path_).value();
 
   // Keys should be stored in sorted order (alpha, middle, zebra)
-  auto r1 = sst.get("alpha");
+  auto r1 = sst_read.get("alpha");
   ASSERT_TRUE(r1.has_value() && r1->has_value());
   EXPECT_EQ(**r1, "a");
 
-  auto r2 = sst.get("zebra");
+  auto r2 = sst_read.get("zebra");
   ASSERT_TRUE(r2.has_value() && r2->has_value());
   EXPECT_EQ(**r2, "z");
 }

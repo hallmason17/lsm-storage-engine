@@ -62,6 +62,12 @@ public:
    */
   void put(const std::string &key, const std::string &value);
 
+  /**
+   * @brief Remove a key-value pair
+   * @param key Key to remove
+   */
+  void rm(const std::string &key);
+
   struct Stats {
     unsigned long get_count;
     unsigned long put_count;
@@ -105,13 +111,6 @@ private:
   std::expected<void, StorageError> maybe_compact();
 
   std::expected<void, StorageError> flush_memtable();
-
-  /**
-   * @brief Write a key-value entry in SSTable binary format.
-   * Format: [keylen:u32][valuelen:u32][key:bytes][value:bytes]
-   */
-  static void write_sst_entry(std::ofstream &out,
-                              const std::pair<std::string, std::string> &entry);
 
   // Timing stats - using atomics for thread-safe updates without holding the
   // main lock

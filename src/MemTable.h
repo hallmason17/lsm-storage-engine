@@ -1,5 +1,6 @@
 #pragma once
 #include "Constants.h"
+#include "SSTable.h"
 #include "StorageError.h"
 #include <expected>
 #include <filesystem>
@@ -70,8 +71,7 @@ public:
    * @param path Destination file path for the SSTable.
    * @return void on success, StorageError on failure.
    */
-  std::expected<void, StorageError>
-  flush_to_disk(const std::filesystem::path &path);
+  std::expected<void, StorageError> flush_to_sst(SSTable &sst);
 
 private:
   std::map<std::string, std::string> map_;
