@@ -16,16 +16,19 @@ Implementing everything naively first and optimizing later.
 - [x] WAL recovery (rebuild memtable on startup)
 - [x] SSTable tracking (which SSTables are part of the system?)
 - [x] SSTable compaction/garbage collection
+- [x] Delete operation (tombstone markers)
+- [x] Store checksums to ensure data integrity
 
 ### Remaining for naive v1
-- [ ] Delete operation (tombstone markers)
-
-## Building
+Complete!
+## Building and Running Tests
 ```bash
 mkdir -p build && cd build
 cmake ..
 make
+./test/lsm_test
 ```
+
 
 ## Learning Resources
 - CMU 15-445 Database Systems
