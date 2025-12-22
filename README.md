@@ -24,11 +24,11 @@ Implementing everything naively first and optimizing later.
 Complete!
 
 ### Optimizations
-- [] mmap SSTables
-- [] SSTable metadata
-- [] SSTable block formatting
-- [] Bloom filters
-- [] More intentional compaction strategy
+- [ ] mmap SSTables
+- [ ] SSTable metadata
+- [ ] SSTable block formatting
+- [ ] Bloom filters
+- [ ] More intentional compaction strategy
 
 ## Building and Running Tests
 ```bash
