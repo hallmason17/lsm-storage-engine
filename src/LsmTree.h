@@ -73,6 +73,8 @@ public:
     unsigned long put_count;
     double avg_get_time_us;
     double avg_put_time_us;
+    long long max_put_time_us_;
+    long long max_get_time_us_;
   };
 
   /**
@@ -118,5 +120,7 @@ private:
   std::atomic<unsigned long> put_count_{0};
   std::atomic<long long> total_get_time_us_{0};
   std::atomic<long long> total_put_time_us_{0};
+  std::atomic<long long> max_put_time_us_{0};
+  std::atomic<long long> max_get_time_us_{0};
 };
 } // namespace lsm_storage_engine
