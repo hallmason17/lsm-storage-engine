@@ -11,6 +11,16 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
+include(FetchContent)
+
+FetchContent_Declare(
+xxHash
+GIT_REPOSITORY https://github.com/Cyan4973/xxHash.git
+GIT_TAG        v0.8.2
+SOURCE_SUBDIR  cmake_unofficial
+)
+FetchContent_MakeAvailable(xxHash)
+
 add_library(lsm_lib
   src/LsmTree.cc
   src/MemTable.cc
@@ -20,8 +30,7 @@ add_library(lsm_lib
 
 target_include_directories(lsm_lib PUBLIC src)
 
-find_package(ZLIB REQUIRED)
-target_link_libraries(lsm_lib PRIVATE ZLIB::ZLIB)
+target_link_libraries(lsm_lib PRIVATE xxHash::xxhash)
 
 # Warnings and errors
 target_compile_options(lsm_lib PRIVATE
