@@ -1,5 +1,4 @@
 #include "LsmTree.h"
-#include <thread>
 int main() {
   using namespace lsm_storage_engine;
   {

@@ -134,14 +134,11 @@ SSTable::read_entry() const {
                val.size(),
            sizeof(file_checksum));
 
-  auto checksum = calc_crc32(std::string_view(
-      reinterpret_cast<const char *>(&keylen), sizeof(keylen)));
-  checksum =
-      calc_crc32(std::string_view(reinterpret_cast<const char *>(&valuelen),
-                                  sizeof(valuelen)),
-                 checksum);
-  checksum = calc_crc32(k, checksum);
-  checksum = calc_crc32(val, checksum);
+  uint32_t datalen = 2 * sizeof(uint32_t) + keylen + valuelen;
+  auto checksum =
+      hash32({reinterpret_cast<const char *>(mapped_data_.data() + file_pos_),
+              datalen});
+
   if (file_checksum != checksum) {
     return std::unexpected(StorageError{
         .kind = StorageError::Kind::FileRead,
@@ -183,16 +180,10 @@ SSTable::write_entry(const std::string_view key, const std::string_view value) {
   append(key.data(), key.size());
   append(value.data(), value.size());
 
-  auto checksum = calc_crc32(std::string_view(
-      reinterpret_cast<const char *>(&keylen), sizeof(keylen)));
-  checksum =
-      calc_crc32(std::string_view(reinterpret_cast<const char *>(&valuelen),
-                                  sizeof(valuelen)),
-                 checksum);
-  checksum = calc_crc32(key, checksum);
-  checksum = calc_crc32(value, checksum);
+  auto cs = hash32({reinterpret_cast<const char *>(write_buffer.data()),
+                    write_buffer.size()});
 
-  append(&checksum, sizeof(checksum));
+  append(&cs, sizeof(cs));
 
   if (::write(fd_, write_buffer.data(), write_buffer.size()) !=
       static_cast<ssize_t>(write_buffer.size())) {
