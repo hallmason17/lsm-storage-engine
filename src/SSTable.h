@@ -95,6 +95,8 @@ private:
    */
   std::expected<void, StorageError> open_file();
 
+  std::expected<void, StorageError> ensure_mapped();
+
   /**
    * @brief Closes the file descriptor if open.
    */

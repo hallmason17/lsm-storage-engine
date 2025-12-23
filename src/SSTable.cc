@@ -90,23 +90,19 @@ std::expected<SSTable, StorageError> SSTable::create() {
   if (!sst.open_file()) {
     return std::unexpected(StorageError::file_open(sst.path_));
   }
+  if (!sst.ensure_mapped()) {
+    return std::unexpected(StorageError::file_read(sst.path().string()));
+  }
   return sst;
 }
 std::expected<SSTable, StorageError>
 SSTable::open(const std::filesystem::path path) {
   SSTable sst{path};
   if (!sst.open_file()) {
-    return std::unexpected(StorageError::file_open(sst.path_.string()));
+    return std::unexpected(StorageError::file_open(sst.path().string()));
   }
-  sst.file_size_ = std::filesystem::file_size(path);
-  if (sst.file_size_ > 0) {
-    void *addr =
-        ::mmap(NULL, sst.file_size_, PROT_READ, MAP_PRIVATE, sst.fd_, 0);
-    if (addr == MAP_FAILED) {
-      return std::unexpected(StorageError::file_read(sst.path_.string()));
-    }
-    sst.mapped_data_ =
-        std::span<std::byte>{static_cast<std::byte *>(addr), sst.file_size_};
+  if (!sst.ensure_mapped()) {
+    return std::unexpected(StorageError::file_read(sst.path().string()));
   }
   return sst;
 }
@@ -125,6 +121,17 @@ SSTable::read_entry_mmap() const {
   ::memcpy(&keylen, mapped_data_.data() + file_pos_, sizeof(keylen));
   ::memcpy(&valuelen, mapped_data_.data() + file_pos_ + sizeof(uint32_t),
            sizeof(valuelen));
+
+  size_t entry_size =
+      2 * sizeof(uint32_t) + keylen + valuelen + sizeof(uint32_t);
+  if (static_cast<size_t>(file_pos_) + entry_size > file_size_) {
+    return std::unexpected(StorageError{
+        .kind = StorageError::Kind::FileRead,
+        .message = "Corrupted SSTable: entry extends past EOF",
+        .path = path(),
+    });
+  }
+
   std::string k(keylen, '\0');
   std::string val(valuelen, '\0');
   ::memcpy(k.data(), mapped_data_.data() + file_pos_ + 2 * sizeof(uint32_t),
@@ -141,18 +148,8 @@ SSTable::read_entry_mmap() const {
 
 std::expected<std::optional<std::pair<std::string, std::string>>, StorageError>
 SSTable::next() {
-  if (mapped_data_.data() == nullptr) {
-    file_size_ = std::filesystem::file_size(path());
-    if (file_size_ > 0) {
-      void *addr = ::mmap(NULL, file_size_, PROT_READ, MAP_PRIVATE, fd_, 0);
-      if (addr == MAP_FAILED) {
-        return std::unexpected(StorageError::file_read(path_.string()));
-      }
-      mapped_data_ =
-          std::span<std::byte>{static_cast<std::byte *>(addr), file_size_};
-    }
-  }
-  auto entry = read_entry_mmap();
+  auto entry = ensure_mapped().and_then([&] { return read_entry_mmap(); });
+
   if (!entry)
     return std::unexpected(StorageError::file_read(path()));
   if (!entry->has_value())
@@ -241,6 +238,20 @@ SSTable::write_entry(const std::string_view key, const std::string_view value) {
   if (::write(fd_, reinterpret_cast<const char *>(&checksum),
               sizeof(checksum)) != sizeof(checksum)) {
     return std::unexpected(StorageError::file_write(path()));
+  }
+  return {};
+}
+std::expected<void, StorageError> SSTable::ensure_mapped() {
+  if (mapped_data_.data() == nullptr) {
+    file_size_ = std::filesystem::file_size(path());
+    if (file_size_ > 0) {
+      void *addr = ::mmap(NULL, file_size_, PROT_READ, MAP_PRIVATE, fd_, 0);
+      if (addr == MAP_FAILED) {
+        return std::unexpected(StorageError::file_read(path_.string()));
+      }
+      mapped_data_ =
+          std::span<std::byte>{static_cast<std::byte *>(addr), file_size_};
+    }
   }
   return {};
 }
