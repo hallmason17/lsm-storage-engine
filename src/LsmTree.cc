@@ -3,6 +3,7 @@
 #include "SSTable.h"
 #include "StorageError.h"
 #include "utils/CheckSum.h"
+#include <atomic>
 #include <chrono>
 #include <expected>
 #include <filesystem>
@@ -42,6 +43,13 @@ std::optional<std::string> LsmTree::get(const std::string_view key) {
           .count();
   total_get_time_us_.fetch_add(duration_us, std::memory_order_relaxed);
   get_count_.fetch_add(1, std::memory_order_relaxed);
+  auto max = max_get_time_us_.load(std::memory_order_relaxed);
+  while (duration_us > max) {
+    if (max_get_time_us_.compare_exchange_weak(max, duration_us,
+                                               std::memory_order_relaxed,
+                                               std::memory_order_relaxed))
+      break;
+  }
 
   return result;
 }
@@ -102,6 +110,13 @@ void LsmTree::put(const std::string &key, const std::string &value) {
           .count();
   total_put_time_us_.fetch_add(duration_us, std::memory_order_relaxed);
   put_count_.fetch_add(1, std::memory_order_relaxed);
+  auto max = max_put_time_us_.load(std::memory_order_relaxed);
+  while (duration_us > max) {
+    if (max_put_time_us_.compare_exchange_weak(max, duration_us,
+                                               std::memory_order_relaxed,
+                                               std::memory_order_relaxed))
+      break;
+  }
 }
 std::expected<void, StorageError> LsmTree::load_ssts() {
   if (std::filesystem::exists("lsm.meta")) {
@@ -127,6 +142,8 @@ LsmTree::Stats LsmTree::stats() const {
   auto put_count = put_count_.load(std::memory_order_relaxed);
   auto total_get_us = total_get_time_us_.load(std::memory_order_relaxed);
   auto total_put_us = total_put_time_us_.load(std::memory_order_relaxed);
+  auto max_get_us = max_get_time_us_.load(std::memory_order_relaxed);
+  auto max_put_us = max_put_time_us_.load(std::memory_order_relaxed);
 
   return Stats{
       .get_count = get_count,
@@ -135,6 +152,8 @@ LsmTree::Stats LsmTree::stats() const {
           get_count > 0 ? static_cast<double>(total_get_us) / get_count : 0.0,
       .avg_put_time_us =
           put_count > 0 ? static_cast<double>(total_put_us) / put_count : 0.0,
+      .max_put_time_us_ = max_put_us,
+      .max_get_time_us_ = max_get_us,
   };
 }
 std::expected<void, StorageError> LsmTree::update_meta(SSTable &sstable) {

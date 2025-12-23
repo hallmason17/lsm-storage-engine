@@ -2,6 +2,7 @@
 #include "MemTable.h"
 #include <filesystem>
 #include <gtest/gtest.h>
+#include <print>
 
 using namespace lsm_storage_engine;
 
@@ -23,17 +24,33 @@ protected:
   // Helper to write test data to SSTable via MemTable flush
   void write_test_data(
       const std::vector<std::pair<std::string, std::string>> &entries) {
-    auto sst = SSTable::open(test_path_).value();
+    auto sst = SSTable::open(test_path_);
+    if (!sst) {
+      std::println("{}", sst.error().message + sst.error().path.string());
+    }
     MemTable mem;
     for (const auto &[key, value] : entries) {
       mem.put(key, value);
     }
-    auto result = mem.flush_to_sst(sst);
+    auto result = mem.flush_to_sst(sst.value());
     ASSERT_TRUE(result.has_value()) << "Failed to flush memtable to disk";
   }
 };
 
 // --- Basic get() tests ---
+//
+TEST_F(SSTableTest, ReadEntryMMap) {
+  write_test_data({{"key1", "value1"}});
+  auto sst = SSTable::open(test_path_);
+  if (!sst) {
+    std::println("{}", sst.error().message + sst.error().path.string());
+  }
+  auto result = sst->read_entry();
+
+  ASSERT_TRUE(result.has_value()) << "get() returned error";
+  ASSERT_TRUE(result->has_value());
+  EXPECT_EQ(result->value().second, "value1");
+}
 
 TEST_F(SSTableTest, GetReturnsNulloptForMissingKey) {
   write_test_data({{"key1", "value1"}});
@@ -77,7 +94,7 @@ TEST_F(SSTableTest, GetEmptySSTable) {
   SSTable sst = SSTable::open(test_path_).value();
 
   auto result = sst.get("anykey");
-  ASSERT_TRUE(result.has_value()) << "get() returned error";
+  ASSERT_TRUE(result.has_value()) << result.error().message;
   EXPECT_FALSE(result->has_value());
 }
 

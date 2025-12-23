@@ -3,6 +3,7 @@
 #include <expected>
 #include <filesystem>
 #include <optional>
+#include <span>
 namespace lsm_storage_engine {
 
 /**
@@ -80,6 +81,8 @@ private:
   std::filesystem::path path_;
   int fd_{-1};
   off_t file_pos_{0};
+  std::span<std::byte> mapped_data_;
+  size_t file_size_{0};
   // TODO: Add a refcount
 
   /**
@@ -87,6 +90,8 @@ private:
    * @return void on success, StorageError on failure.
    */
   std::expected<void, StorageError> open_file();
+
+  std::expected<void, StorageError> ensure_mapped();
 
   /**
    * @brief Closes the file descriptor if open.
