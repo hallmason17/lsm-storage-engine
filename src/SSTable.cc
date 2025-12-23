@@ -7,6 +7,7 @@
 #include <expected>
 #include <fcntl.h>
 #include <filesystem>
+#include <optional>
 #include <print>
 #include <span>
 #include <string>
@@ -109,6 +110,9 @@ SSTable::open(const std::filesystem::path path) {
 
 std::expected<std::optional<std::pair<std::string, std::string>>, StorageError>
 SSTable::read_entry_mmap() const {
+  if (file_size_ == 0) {
+    return std::nullopt;
+  }
   if (mapped_data_.data() == nullptr) {
     return std::unexpected(StorageError::file_open(path()));
   }
@@ -150,8 +154,9 @@ std::expected<std::optional<std::pair<std::string, std::string>>, StorageError>
 SSTable::next() {
   auto entry = ensure_mapped().and_then([&] { return read_entry_mmap(); });
 
-  if (!entry)
+  if (!entry) {
     return std::unexpected(StorageError::file_read(path()));
+  }
   if (!entry->has_value())
     return std::nullopt;
   auto &[k, v] = entry->value();
