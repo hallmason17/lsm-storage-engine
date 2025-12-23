@@ -45,7 +45,7 @@ TEST_F(SSTableTest, ReadEntryMMap) {
   if (!sst) {
     std::println("{}", sst.error().message + sst.error().path.string());
   }
-  auto result = sst->read_entry_mmap();
+  auto result = sst->read_entry();
 
   ASSERT_TRUE(result.has_value()) << "get() returned error";
   ASSERT_TRUE(result->has_value());

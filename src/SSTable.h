@@ -75,10 +75,6 @@ public:
   std::expected<void, StorageError> write_entry(const std::string_view key,
                                                 const std::string_view value);
 
-  std::expected<std::optional<std::pair<std::string, std::string>>,
-                StorageError>
-  read_entry_mmap() const;
-
   bool marked_for_delete_{false};
 
 private:
