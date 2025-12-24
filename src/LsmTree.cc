@@ -195,20 +195,40 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
     // merge sort combine
     while ((lhs && rhs) && (lhs->has_value() || rhs->has_value())) {
       if (!lhs->has_value() && rhs->has_value()) {
-        sst->write_entry(rhs->value().first, rhs->value().second);
+        auto write_res =
+            sst->write_entry(rhs->value().first, rhs->value().second);
+        if (!write_res) {
+          return std::unexpected{write_res.error()};
+        }
         rhs = ss_tables_[i + 1].next();
       } else if (!rhs->has_value() && lhs->has_value()) {
-        sst->write_entry(lhs->value().first, lhs->value().second);
+        auto write_res =
+            sst->write_entry(lhs->value().first, lhs->value().second);
+        if (!write_res) {
+          return std::unexpected{write_res.error()};
+        }
         lhs = ss_tables_[i].next();
       } else if (lhs->value().first < rhs->value().first) {
-        sst->write_entry(lhs->value().first, lhs->value().second);
+        auto write_res =
+            sst->write_entry(lhs->value().first, lhs->value().second);
+        if (!write_res) {
+          return std::unexpected{write_res.error()};
+        }
         lhs = ss_tables_[i].next();
       } else if (rhs->value().first < lhs->value().first) {
-        sst->write_entry(rhs->value().first, rhs->value().second);
+        auto write_res =
+            sst->write_entry(rhs->value().first, rhs->value().second);
+        if (!write_res) {
+          return std::unexpected{write_res.error()};
+        }
         rhs = ss_tables_[i + 1].next();
       } else {
         // Keys are equal - keep the newer value (rhs)
-        sst->write_entry(rhs->value().first, rhs->value().second);
+        auto write_res =
+            sst->write_entry(rhs->value().first, rhs->value().second);
+        if (!write_res) {
+          return std::unexpected{write_res.error()};
+        }
         lhs = ss_tables_[i].next();
         rhs = ss_tables_[i + 1].next();
       }
@@ -216,6 +236,10 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
     ss_tables_[i].marked_for_delete_ = true;
     ss_tables_[i + 1].marked_for_delete_ = true;
     new_ssts.push_back(std::move(sst.value()));
+  }
+  if (ss_tables_.size() % 2 == 1) {
+    new_ssts.push_back(std::move(ss_tables_.back()));
+    ss_tables_.pop_back();
   }
   cleanup_sst_files(ss_tables_);
   ss_tables_ = std::move(new_ssts);
