@@ -10,7 +10,6 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <optional>
-#include <print>
 #include <span>
 #include <string>
 #include <sys/mman.h>
@@ -180,7 +179,11 @@ SSTable::read_entry() const {
                val.size(),
            sizeof(file_checksum));
 
+<<<<<<< HEAD
   auto datalen =
+=======
+  uint32_t datalen =
+>>>>>>> 8cb01b1 (fix gcc compiler warnings)
       static_cast<uint32_t>(2 * sizeof(uint32_t) + keylen + valuelen);
   auto checksum =
       hash32({reinterpret_cast<const char *>(mapped_data_.data() + file_pos_),
