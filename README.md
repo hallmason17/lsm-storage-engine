@@ -2,10 +2,7 @@
 
 C++23 implementation of a Log-Structured Merge-tree, the data structure behind RocksDB, LevelDB, and Cassandra.
 
-```
-Write: WAL → MemTable → SSTable (flush at 4KB for now)
-Read:  MemTable → SSTables (newest first)
-```
+![LSM-Tree Architecture](./docs/architecture.png)
 
 ## Features
 
