@@ -13,13 +13,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install GCC 14
+      - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++-14
+          sudo apt-get install -y g++-14 ninja-build
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
         env:
           CXX: g++-14
           CC: gcc-14
