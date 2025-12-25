@@ -49,11 +49,10 @@ cmake -B build -DCMAKE_BUILD_TYPE=Debug
 - Buffered writes batch data before hitting disk
 
 ## TODOs
-
-  [ ] Block-based SSTable format
-  [ ] Bloom filters
-  [ ] Leveled compaction
-  [ ] Range scans
+- [ ] Block-based SSTable format
+- [ ] Bloom filters
+- [ ] Leveled compaction
+- [ ] Range scans
 
 ## References
 
