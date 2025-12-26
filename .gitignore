@@ -9,3 +9,4 @@ compile_commands*
 .*
 !.gitignore
 !.github/
+profile.json.gz
