@@ -81,11 +81,10 @@ void LsmTree::put(const std::string &key, const std::string &value) {
   auto start = std::chrono::high_resolution_clock::now();
 
   {
-    std::string msg = std::format("p {} {}\n", key, value);
 
     // Lock to ensure these two operations are atomic.
     std::unique_lock lock(rwlock_);
-    if (!wal_.write(msg)) {
+    if (!wal_.write(key, value)) {
       throw std::runtime_error("Failed to write to WAL!");
     }
     mem_table_.put(key, value);
@@ -125,12 +124,16 @@ std::expected<void, StorageError> LsmTree::load_ssts() {
     std::string line;
     while (std::getline(metafile, line)) {
       if (line.contains(".sst")) {
-        auto sst =
+        auto result =
             SSTable::open(std::string(line))
-                .and_then([&](SSTable ss) -> std::expected<void, StorageError> {
-                  ss_tables_.emplace_back(std::move(ss));
-                  return {};
-                });
+                .and_then(
+                    [&](SSTable table) -> std::expected<void, StorageError> {
+                      ss_tables_.emplace_back(std::move(table));
+                      return {};
+                    });
+        if (!result) {
+          return std::unexpected{result.error()};
+        }
       }
     }
   }
@@ -189,11 +192,22 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
     // Make a new sst
     auto sst = SSTable::create();
     if (!sst) {
-      return std::unexpected(
-          StorageError::file_open("failed to create SSTable"));
+      return std::unexpected(sst.error());
     }
-    auto lhs = ss_tables_[i].next();
-    auto rhs = ss_tables_[i + 1].next();
+    SSTable &left_table = ss_tables_[i];
+    SSTable &right_table = ss_tables_[i + 1];
+    auto min_key = left_table.header().min_key < right_table.header().min_key
+                       ? left_table.header().min_key
+                       : right_table.header().min_key;
+    auto max_key = left_table.header().max_key > right_table.header().max_key
+                       ? left_table.header().max_key
+                       : right_table.header().max_key;
+    SSTable::Header header{min_key, max_key};
+    if (auto res = sst.value().write_header(std::move(header)); !res) {
+      return std::unexpected{res.error()};
+    }
+    auto lhs = left_table.next();
+    auto rhs = right_table.next();
     // merge sort combine
     while ((lhs && rhs) && (lhs->has_value() || rhs->has_value())) {
       if (!lhs->has_value() && rhs->has_value()) {
@@ -235,8 +249,13 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
         rhs = ss_tables_[i + 1].next();
       }
     }
-    ss_tables_[i].marked_for_delete_ = true;
-    ss_tables_[i + 1].marked_for_delete_ = true;
+    left_table.marked_for_delete_ = true;
+    right_table.marked_for_delete_ = true;
+
+    SSTable::Footer footer;
+    if (auto res = sst.value().write_footer(footer); !res) {
+      return std::unexpected{res.error()};
+    }
     new_ssts.push_back(std::move(sst.value()));
   }
   if (ss_tables_.size() % 2 == 1) {
@@ -256,5 +275,5 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
   }
   return {};
 }
-void LsmTree::rm(const std::string &key) { put(key, ""); }
+void LsmTree::rm(const std::string &) {}
 } // namespace lsm_storage_engine

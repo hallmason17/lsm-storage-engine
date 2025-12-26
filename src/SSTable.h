@@ -1,4 +1,5 @@
 #pragma once
+#include "Constants.h"
 #include "StorageError.h"
 #include <expected>
 #include <filesystem>
@@ -27,6 +28,13 @@ public:
    * @return SSTable on success, StorageError if the file cannot be created.
    */
   static std::expected<SSTable, StorageError> create();
+
+  /**
+   * @brief Creates a new SSTable at the specified path.
+   * @param path Path for the new SSTable file.
+   * @return SSTable on success, StorageError if the file cannot be created.
+   */
+  static std::expected<SSTable, StorageError> create(std::filesystem::path path);
 
   /**
    * @brief Opens an existing SSTable from the specified path.
@@ -77,12 +85,57 @@ public:
 
   bool marked_for_delete_{false};
 
+  struct Header {
+    std::string min_key;
+    std::string max_key;
+    /**
+     * Serialized size in bytes.
+     */
+    size_t size;
+    Header() : min_key(), max_key(), size(0) {}
+    Header(std::string min, std::string max)
+        : min_key(std::move(min)), max_key(std::move(max)),
+          size(this->min_key.size() + sizeof(uint32_t) + this->max_key.size() +
+               sizeof(uint32_t)) {
+
+      // Serialized size in bytes:
+      // [num_entries:4][min_key_len:4][min_key][max_key_len:4][max_key]
+    }
+  };
+  struct Footer {
+    size_t index_offset;
+    size_t index_size;
+    size_t num_index_entries;
+    size_t magic_num;
+    Footer()
+        : index_offset(0), index_size(0), num_index_entries(0),
+          magic_num(lsm_constants::kMagicNumber) {}
+    Footer(size_t offset, size_t size, size_t num_entries)
+        : index_offset(offset), index_size(size),
+          num_index_entries(num_entries),
+          magic_num(lsm_constants::kMagicNumber) {}
+  };
+  std::expected<Header, StorageError> read_header();
+  std::expected<Footer, StorageError> read_footer();
+  std::expected<void, StorageError> write_header(Header &&header);
+  std::expected<void, StorageError> write_footer(Footer footer);
+  [[nodiscard]]
+  const Header &header() const {
+    return header_;
+  }
+  [[nodiscard]]
+  const Footer &footer() const {
+    return footer_;
+  }
+
 private:
   std::filesystem::path path_;
   int fd_{-1};
   off_t file_pos_{0};
   std::span<std::byte> mapped_data_;
   size_t file_size_{0};
+  Header header_;
+  Footer footer_;
   // TODO: Add a refcount
 
   /**
