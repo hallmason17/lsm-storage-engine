@@ -68,10 +68,24 @@ TEST_F(LsmTreeTest, PutWritesToWal) {
     lsm.put("key", "value");
   }
 
-  std::ifstream file(wal_path_);
-  std::stringstream buffer;
-  buffer << file.rdbuf();
-  EXPECT_EQ(buffer.str(), "p key value\n");
+  // WAL uses binary format: [keylen:4][valuelen:4][key][value][checksum:4]
+  std::ifstream file(wal_path_, std::ios::binary);
+  ASSERT_TRUE(file.good());
+
+  uint32_t keylen = 0, valuelen = 0;
+  file.read(reinterpret_cast<char *>(&keylen), sizeof(keylen));
+  file.read(reinterpret_cast<char *>(&valuelen), sizeof(valuelen));
+
+  EXPECT_EQ(keylen, 3);   // "key"
+  EXPECT_EQ(valuelen, 5); // "value"
+
+  std::string key(keylen, '\0');
+  std::string value(valuelen, '\0');
+  file.read(key.data(), keylen);
+  file.read(value.data(), valuelen);
+
+  EXPECT_EQ(key, "key");
+  EXPECT_EQ(value, "value");
 }
 
 // --- SSTable integration tests ---

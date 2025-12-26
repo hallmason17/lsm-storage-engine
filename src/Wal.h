@@ -30,7 +30,8 @@ public:
    * @param message The message to append to the log
    * @return void on success, StorageError on failure.
    */
-  std::expected<void, StorageError> write(std::string_view message);
+  std::expected<void, StorageError> write(std::string_view key,
+                                          std::string_view value);
 
   /**
    * @brief Get the path to the WAL.
