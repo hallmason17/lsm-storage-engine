@@ -1,5 +1,6 @@
 #include "Wal.h"
 #include "StorageError.h"
+#include "utils/CheckSum.h"
 #include <cassert>
 #include <expected>
 #include <fcntl.h>
@@ -7,6 +8,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <utility>
+#include <vector>
 
 namespace lsm_storage_engine {
 
@@ -45,21 +47,31 @@ void Wal::close_file() {
   }
 }
 
-std::expected<void, StorageError> Wal::write(std::string_view message) {
-  const char *data = message.data();
-  size_t remaining = message.size();
+std::expected<void, StorageError> Wal::write(std::string_view key,
+                                             std::string_view value) {
+  std::vector<std::byte> write_buffer;
+  auto keylen = static_cast<uint32_t>(key.size());
+  auto valuelen = static_cast<uint32_t>(value.size());
 
-  assert(fd_ > -1);
+  auto append = [&write_buffer](const void *d, size_t len) {
+    auto data = reinterpret_cast<const std::byte *>(d);
+    write_buffer.insert(write_buffer.end(), data, data + len);
+  };
 
-  while (remaining > 0) {
-    ssize_t written = ::write(fd_, data, remaining);
-    if (written == -1) {
-      return std::unexpected{StorageError::file_write(path())};
-    }
-    data += written;
-    remaining -= static_cast<size_t>(written);
+  append(&keylen, sizeof(keylen));
+  append(&valuelen, sizeof(valuelen));
+  append(key.data(), key.size());
+  append(value.data(), value.size());
+
+  auto cs = hash32({reinterpret_cast<const char *>(write_buffer.data()),
+                    write_buffer.size()});
+
+  append(&cs, sizeof(cs));
+
+  if (::write(fd_, write_buffer.data(), write_buffer.size()) !=
+      static_cast<ssize_t>(write_buffer.size())) {
+    return std::unexpected(StorageError::file_write(path()));
   }
-
   return sync();
 }
 
