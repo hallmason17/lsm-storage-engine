@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-14 ninja-build
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+        env:
+          CXX: g++-14
+          CC: gcc-14
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ./build/test/lsm_test
+        env:
+          ASAN_OPTIONS: abort_on_error=1
+          UBSAN_OPTIONS: abort_on_error=1

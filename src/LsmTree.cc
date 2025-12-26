@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <mutex>
 #include <optional>
 #include <ranges>
 #include <shared_mutex>
@@ -150,10 +151,12 @@ LsmTree::Stats LsmTree::stats() const {
   return Stats{
       .get_count = get_count,
       .put_count = put_count,
-      .avg_get_time_us =
-          get_count > 0 ? static_cast<double>(total_get_us) / get_count : 0.0,
-      .avg_put_time_us =
-          put_count > 0 ? static_cast<double>(total_put_us) / put_count : 0.0,
+      .avg_get_time_us = get_count > 0 ? static_cast<double>(total_get_us) /
+                                             static_cast<double>(get_count)
+                                       : 0.0,
+      .avg_put_time_us = put_count > 0 ? static_cast<double>(total_put_us) /
+                                             static_cast<double>(put_count)
+                                       : 0.0,
       .max_put_time_us_ = max_put_us,
       .max_get_time_us_ = max_get_us,
   };
