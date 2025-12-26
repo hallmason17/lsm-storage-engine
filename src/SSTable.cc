@@ -2,7 +2,6 @@
 #include "Constants.h"
 #include "StorageError.h"
 #include "utils/CheckSum.h"
-#include <bit>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -10,7 +9,6 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <optional>
-#include <print>
 #include <span>
 #include <string>
 #include <sys/mman.h>
@@ -155,7 +153,8 @@ SSTable::read_entry() const {
                val.size(),
            sizeof(file_checksum));
 
-  uint32_t datalen = 2 * sizeof(uint32_t) + keylen + valuelen;
+  uint32_t datalen =
+      static_cast<uint32_t>(2 * sizeof(uint32_t) + keylen + valuelen);
   auto checksum =
       hash32({reinterpret_cast<const char *>(mapped_data_.data() + file_pos_),
               datalen});
@@ -185,7 +184,8 @@ SSTable::next() {
   auto &[k, v] = entry->value();
 
   // [keysize][valuesize][key][val][checksum]
-  file_pos_ += sizeof(uint32_t) * 2 + k.size() + v.size() + sizeof(uint32_t);
+  file_pos_ += static_cast<off_t>(sizeof(uint32_t) * 2 + k.size() + v.size() +
+                                  sizeof(uint32_t));
   return {{{std::move(k), std::move(v)}}};
 }
 std::expected<void, StorageError>
