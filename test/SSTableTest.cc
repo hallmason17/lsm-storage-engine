@@ -24,10 +24,11 @@ protected:
   // Helper to write test data to SSTable via MemTable flush
   void write_test_data(
       const std::vector<std::pair<std::string, std::string>> &entries) {
-    auto sst = SSTable::open(test_path_);
+    auto sst = SSTable::create(test_path_);
     if (!sst) {
       std::println("{}", sst.error().message + sst.error().path.string());
     }
+    ASSERT_TRUE(sst.has_value()) << "Failed to create SSTable";
     MemTable mem;
     for (const auto &[key, value] : entries) {
       mem.put(key, value);
@@ -42,12 +43,12 @@ protected:
 TEST_F(SSTableTest, ReadEntryMMap) {
   write_test_data({{"key1", "value1"}});
   auto sst = SSTable::open(test_path_);
-  if (!sst) {
-    std::println("{}", sst.error().message + sst.error().path.string());
-  }
-  auto result = sst->read_entry();
+  ASSERT_TRUE(sst.has_value()) << sst.error().message + sst.error().path.string();
 
-  ASSERT_TRUE(result.has_value()) << "get() returned error";
+  // Use next() which handles positioning after the header
+  auto result = sst->next();
+
+  ASSERT_TRUE(result.has_value()) << "next() returned error";
   ASSERT_TRUE(result->has_value());
   EXPECT_EQ(result->value().second, "value1");
 }
