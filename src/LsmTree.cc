@@ -65,7 +65,7 @@ std::expected<void, StorageError> LsmTree::flush_memtable() {
             if (!mem_table_.flush_to_sst(sst)) {
               return std::unexpected(StorageError::file_write(sst.path()));
             }
-            return std::move(sst);
+            return sst;
           })
           .and_then([&](SSTable sst) -> std::expected<void, StorageError> {
             mem_table_.clear();
@@ -124,15 +124,15 @@ std::expected<void, StorageError> LsmTree::load_ssts() {
     std::string line;
     while (std::getline(metafile, line)) {
       if (line.contains(".sst")) {
-        auto sst =
+        auto result =
             SSTable::open(std::string(line))
                 .and_then(
-                    [&](SSTable sst) -> std::expected<void, StorageError> {
-                      ss_tables_.emplace_back(std::move(sst));
+                    [&](SSTable table) -> std::expected<void, StorageError> {
+                      ss_tables_.emplace_back(std::move(table));
                       return {};
                     });
-        if (!sst) {
-          return std::unexpected{sst.error()};
+        if (!result) {
+          return std::unexpected{result.error()};
         }
       }
     }

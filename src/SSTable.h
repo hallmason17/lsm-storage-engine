@@ -93,8 +93,8 @@ public:
      */
     size_t size;
     Header() : min_key(), max_key(), size(0) {}
-    Header(std::string min_key, std::string max_key)
-        : min_key(std::move(min_key)), max_key(std::move(max_key)),
+    Header(std::string min, std::string max)
+        : min_key(std::move(min)), max_key(std::move(max)),
           size(this->min_key.size() + sizeof(uint32_t) + this->max_key.size() +
                sizeof(uint32_t)) {
 
@@ -110,9 +110,9 @@ public:
     Footer()
         : index_offset(0), index_size(0), num_index_entries(0),
           magic_num(lsm_constants::kMagicNumber) {}
-    Footer(size_t index_offset, size_t index_size, size_t num_index_entries)
-        : index_offset(index_offset), index_size(index_size),
-          num_index_entries(num_index_entries),
+    Footer(size_t offset, size_t size, size_t num_entries)
+        : index_offset(offset), index_size(size),
+          num_index_entries(num_entries),
           magic_num(lsm_constants::kMagicNumber) {}
   };
   std::expected<Header, StorageError> read_header();
