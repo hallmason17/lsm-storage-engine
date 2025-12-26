@@ -279,8 +279,7 @@ std::expected<SSTable::Header, StorageError> SSTable::read_header() {
                      min_key_len,
                  max_key_len);
 
-        Header header{min_key, max_key};
-        return header;
+        return Header{min_key, max_key};
       });
   if (!header) {
     return std::unexpected{header.error()};
