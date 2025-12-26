@@ -30,11 +30,27 @@ void MemTable::put(std::string key, std::string value) {
 }
 
 std::expected<void, StorageError> MemTable::flush_to_sst(SSTable &sst) {
+  // Handle empty table - write valid SSTable with empty key range
+  std::string min_key;
+  std::string max_key;
+  if (!map_.empty()) {
+    min_key = map_.begin()->first;
+    max_key = map_.rbegin()->first;
+  }
+
+  SSTable::Header header{min_key, max_key};
+  if (auto res = sst.write_header(std::move(header)); !res) {
+    return std::unexpected{res.error()};
+  }
   for (const auto &[key, val] : map_) {
     auto result = sst.write_entry(key, val);
     if (!result) {
       return std::unexpected(result.error());
     }
+  }
+  SSTable::Footer footer;
+  if (auto res = sst.write_footer(std::move(footer)); !res) {
+    return std::unexpected{res.error()};
   }
   return {};
 }
