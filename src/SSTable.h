@@ -34,14 +34,16 @@ public:
    * @param path Path for the new SSTable file.
    * @return SSTable on success, StorageError if the file cannot be created.
    */
-  static std::expected<SSTable, StorageError> create(std::filesystem::path path);
+  static std::expected<SSTable, StorageError>
+  create(std::filesystem::path path);
 
   /**
    * @brief Opens an existing SSTable from the specified path.
    * @param path Path to the SSTable file.
    * @return SSTable on success, StorageError if the file cannot be opened.
    */
-  static std::expected<SSTable, StorageError> open(const std::filesystem::path);
+  static std::expected<SSTable, StorageError>
+  open(const std::filesystem::path &);
 
   /**
    * @brief Constructs an SSTable with the given path (does not open file).
@@ -80,8 +82,8 @@ public:
   std::expected<std::optional<std::pair<std::string, std::string>>,
                 StorageError>
   read_entry() const;
-  std::expected<void, StorageError> write_entry(const std::string_view key,
-                                                const std::string_view value);
+  std::expected<void, StorageError>
+  write_entry(const std::string_view key, const std::string_view value) const;
 
   bool marked_for_delete_{false};
 

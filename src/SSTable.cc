@@ -23,7 +23,7 @@ SSTable::SSTable(SSTable &&other) noexcept
       file_pos_{std::exchange(other.file_pos_, 0)},
       mapped_data_{std::exchange(other.mapped_data_, {})},
       file_size_{std::exchange(other.file_size_, 0)},
-      header_{std::move(other.header_)}, footer_{std::move(other.footer_)} {}
+      header_{std::move(other.header_)}, footer_{other.footer_} {}
 
 SSTable &SSTable::operator=(SSTable &&other) noexcept {
   if (this != &other) {
@@ -34,7 +34,7 @@ SSTable &SSTable::operator=(SSTable &&other) noexcept {
     file_pos_ = std::exchange(other.file_pos_, 0);
     file_size_ = std::exchange(other.file_size_, 0);
     header_ = std::move(other.header_);
-    footer_ = std::move(other.footer_);
+    footer_ = other.footer_;
   }
   return *this;
 }
@@ -94,7 +94,7 @@ SSTable::create(std::filesystem::path path) {
   return sst;
 }
 std::expected<SSTable, StorageError>
-SSTable::open(const std::filesystem::path path) {
+SSTable::open(const std::filesystem::path &path) {
   SSTable sst{path};
   if (auto res = sst.open_file(); !res) {
     return std::unexpected{res.error()};
@@ -153,7 +153,7 @@ SSTable::read_entry() const {
                val.size(),
            sizeof(file_checksum));
 
-  uint32_t datalen =
+  auto datalen =
       static_cast<uint32_t>(2 * sizeof(uint32_t) + keylen + valuelen);
   auto checksum =
       hash32({reinterpret_cast<const char *>(mapped_data_.data() + file_pos_),
@@ -189,7 +189,8 @@ SSTable::next() {
   return {{{std::move(k), std::move(v)}}};
 }
 std::expected<void, StorageError>
-SSTable::write_entry(const std::string_view key, const std::string_view value) {
+SSTable::write_entry(const std::string_view key,
+                     const std::string_view value) const {
   std::vector<std::byte> write_buffer;
   auto keylen = static_cast<uint32_t>(key.size());
   auto valuelen = static_cast<uint32_t>(value.size());

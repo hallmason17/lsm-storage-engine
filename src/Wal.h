@@ -31,7 +31,7 @@ public:
    * @return void on success, StorageError on failure.
    */
   std::expected<void, StorageError> write(std::string_view key,
-                                          std::string_view value);
+                                          std::string_view value) const;
 
   /**
    * @brief Get the path to the WAL.
@@ -43,13 +43,13 @@ public:
    * @brief Truncate the WAL to zero bytes.
    * @return void on success, StorageError on failure.
    */
-  std::expected<void, StorageError> clear();
+  std::expected<void, StorageError> clear() const;
 
   /**
    * @brief Sync buffered writes to disk.
    * @return void on success, StorageError on failure.
    */
-  std::expected<void, StorageError> sync();
+  std::expected<void, StorageError> sync() const;
 
 private:
   std::filesystem::path path_;
