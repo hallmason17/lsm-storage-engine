@@ -48,7 +48,7 @@ void Wal::close_file() {
 }
 
 std::expected<void, StorageError> Wal::write(std::string_view key,
-                                             std::string_view value) {
+                                             std::string_view value) const {
   std::vector<std::byte> write_buffer;
   auto keylen = static_cast<uint32_t>(key.size());
   auto valuelen = static_cast<uint32_t>(value.size());
@@ -75,14 +75,14 @@ std::expected<void, StorageError> Wal::write(std::string_view key,
   return sync();
 }
 
-std::expected<void, StorageError> Wal::sync() {
+std::expected<void, StorageError> Wal::sync() const {
   if (::fsync(fd_) == -1) {
     return std::unexpected{StorageError::file_write(path())};
   }
   return {};
 }
 
-std::expected<void, StorageError> Wal::clear() {
+std::expected<void, StorageError> Wal::clear() const {
   if (::ftruncate(fd_, 0) == -1) {
     return std::unexpected{StorageError::file_write(path())};
   }
