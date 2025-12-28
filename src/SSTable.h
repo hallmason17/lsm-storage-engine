@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <optional>
 #include <span>
+#include <vector>
 namespace lsm_storage_engine {
 
 /**
@@ -82,7 +83,7 @@ public:
   std::expected<std::optional<std::pair<std::string, std::string>>,
                 StorageError>
   read_entry() const;
-  std::expected<void, StorageError>
+  std::expected<size_t, StorageError>
   write_entry(const std::string_view key, const std::string_view value) const;
 
   bool marked_for_delete_{false};
@@ -117,10 +118,20 @@ public:
           num_index_entries(num_entries),
           magic_num(lsm_constants::kMagicNumber) {}
   };
+
+  struct IndexEntry {
+    std::string key;
+    size_t file_position;
+    IndexEntry() : key{}, file_position{0} {}
+    IndexEntry(std::string k, size_t fpos)
+        : key{std::move(k)}, file_position{fpos} {}
+  };
   std::expected<Header, StorageError> read_header();
   std::expected<Footer, StorageError> read_footer();
   std::expected<void, StorageError> write_header(Header &&header);
   std::expected<void, StorageError> write_footer(Footer footer);
+  std::expected<size_t, StorageError> write_index();
+  std::expected<void, StorageError> read_index();
   [[nodiscard]]
   const Header &header() const {
     return header_;
@@ -128,6 +139,11 @@ public:
   [[nodiscard]]
   const Footer &footer() const {
     return footer_;
+  }
+
+  [[nodiscard]]
+  std::vector<IndexEntry> &index() {
+    return index_;
   }
 
 private:
@@ -138,6 +154,7 @@ private:
   size_t file_size_{0};
   Header header_;
   Footer footer_;
+  std::vector<IndexEntry> index_;
   // TODO: Add a refcount
 
   /**

@@ -1,4 +1,5 @@
 #include "LsmTree.h"
+#include "Constants.h"
 #include "MemTable.h"
 #include "SSTable.h"
 #include "StorageError.h"
@@ -7,7 +8,6 @@
 #include <chrono>
 #include <expected>
 #include <filesystem>
-#include <format>
 #include <fstream>
 #include <mutex>
 #include <optional>
@@ -206,6 +206,8 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
     if (auto res = sst.value().write_header(std::move(header)); !res) {
       return std::unexpected{res.error()};
     }
+    size_t bytes_written{sst->header().size};
+    size_t entry_count{0};
     auto lhs = left_table.next();
     auto rhs = right_table.next();
     // merge sort combine
@@ -216,6 +218,12 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
         if (!write_res) {
           return std::unexpected{write_res.error()};
         }
+        if (entry_count % lsm_constants::kIndexSpace == 0) {
+          sst->index().emplace_back(std::string{rhs->value().first},
+                                    bytes_written);
+        }
+        bytes_written += write_res.value();
+        entry_count++;
         rhs = ss_tables_[i + 1].next();
       } else if (!rhs->has_value() && lhs->has_value()) {
         auto write_res =
@@ -223,6 +231,12 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
         if (!write_res) {
           return std::unexpected{write_res.error()};
         }
+        if (entry_count % lsm_constants::kIndexSpace == 0) {
+          sst->index().emplace_back(std::string{lhs->value().first},
+                                    bytes_written);
+        }
+        bytes_written += write_res.value();
+        entry_count++;
         lhs = ss_tables_[i].next();
       } else if (lhs->value().first < rhs->value().first) {
         auto write_res =
@@ -230,6 +244,12 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
         if (!write_res) {
           return std::unexpected{write_res.error()};
         }
+        if (entry_count % lsm_constants::kIndexSpace == 0) {
+          sst->index().emplace_back(std::string{lhs->value().first},
+                                    bytes_written);
+        }
+        bytes_written += write_res.value();
+        entry_count++;
         lhs = ss_tables_[i].next();
       } else if (rhs->value().first < lhs->value().first) {
         auto write_res =
@@ -237,6 +257,12 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
         if (!write_res) {
           return std::unexpected{write_res.error()};
         }
+        if (entry_count % lsm_constants::kIndexSpace == 0) {
+          sst->index().emplace_back(std::string{rhs->value().first},
+                                    bytes_written);
+        }
+        bytes_written += write_res.value();
+        entry_count++;
         rhs = ss_tables_[i + 1].next();
       } else {
         // Keys are equal - keep the newer value (rhs)
@@ -245,6 +271,12 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
         if (!write_res) {
           return std::unexpected{write_res.error()};
         }
+        if (entry_count % lsm_constants::kIndexSpace == 0) {
+          sst->index().emplace_back(std::string{rhs->value().first},
+                                    bytes_written);
+        }
+        bytes_written += write_res.value();
+        entry_count++;
         lhs = ss_tables_[i].next();
         rhs = ss_tables_[i + 1].next();
       }
@@ -253,6 +285,14 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
     right_table.marked_for_delete_ = true;
 
     SSTable::Footer footer;
+    footer.index_offset = bytes_written;
+    auto idx_res = sst->write_index();
+    if (!idx_res) {
+      return std::unexpected{idx_res.error()};
+    }
+    footer.index_size = idx_res.value();
+    footer.num_index_entries = sst->index().size();
+
     if (auto res = sst.value().write_footer(footer); !res) {
       return std::unexpected{res.error()};
     }
