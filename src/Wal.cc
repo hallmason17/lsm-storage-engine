@@ -72,7 +72,7 @@ std::expected<void, StorageError> Wal::write(std::string_view key,
       static_cast<ssize_t>(write_buffer.size())) {
     return std::unexpected(StorageError::file_write(path()));
   }
-  return sync();
+  return {};
 }
 
 std::expected<void, StorageError> Wal::sync() const {
