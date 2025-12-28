@@ -2,6 +2,7 @@
 #include "Constants.h"
 #include "StorageError.h"
 #include "utils/CheckSum.h"
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -23,7 +24,8 @@ SSTable::SSTable(SSTable &&other) noexcept
       file_pos_{std::exchange(other.file_pos_, 0)},
       mapped_data_{std::exchange(other.mapped_data_, {})},
       file_size_{std::exchange(other.file_size_, 0)},
-      header_{std::move(other.header_)}, footer_{other.footer_} {}
+      header_{std::move(other.header_)}, footer_{other.footer_},
+      index_{std::move(other.index_)} {}
 
 SSTable &SSTable::operator=(SSTable &&other) noexcept {
   if (this != &other) {
@@ -35,6 +37,7 @@ SSTable &SSTable::operator=(SSTable &&other) noexcept {
     file_size_ = std::exchange(other.file_size_, 0);
     header_ = std::move(other.header_);
     footer_ = other.footer_;
+    index_ = std::move(other.index_);
   }
   return *this;
 }
@@ -62,8 +65,16 @@ SSTable::get(std::string_view key) {
   if (key < header().min_key || key > header().max_key) {
     return std::nullopt;
   }
-  file_pos_ = static_cast<off_t>(header().size);
-  while (true) {
+  size_t jump_to{header().size};
+  auto it = std::ranges::upper_bound(index_, key, std::ranges::less{},
+                                     &IndexEntry::key);
+  if (it != index_.begin()) {
+    --it;
+    jump_to = it->file_position;
+  }
+
+  file_pos_ = static_cast<off_t>(jump_to);
+  for (size_t i = 0; i < lsm_constants::kIndexSpace; ++i) {
     auto entry = next();
     if (!entry)
       return std::unexpected{entry.error()};
@@ -74,6 +85,7 @@ SSTable::get(std::string_view key) {
       return entry->value().second;
     }
   }
+  return std::nullopt;
 }
 std::expected<SSTable, StorageError> SSTable::create() {
   SSTable sst;
@@ -108,6 +120,9 @@ SSTable::open(const std::filesystem::path &path) {
   if (auto res = sst.read_footer(); !res) {
     return std::unexpected{res.error()};
   }
+  if (auto res = sst.read_index(); !res) {
+    return std::unexpected{res.error()};
+  }
   return sst;
 }
 
@@ -119,8 +134,8 @@ SSTable::read_entry() const {
   if (mapped_data_.data() == nullptr) {
     return std::unexpected(StorageError::file_open(path()));
   }
-  // Stop before the footer region
-  size_t data_end = file_size_ - sizeof(Footer);
+  // Stop before the index
+  size_t data_end = footer().index_offset;
   if (static_cast<size_t>(file_pos_) >= data_end) {
     return std::nullopt;
   }
@@ -188,7 +203,7 @@ SSTable::next() {
                                   sizeof(uint32_t));
   return {{{std::move(k), std::move(v)}}};
 }
-std::expected<void, StorageError>
+std::expected<size_t, StorageError>
 SSTable::write_entry(const std::string_view key,
                      const std::string_view value) const {
   std::vector<std::byte> write_buffer;
@@ -215,7 +230,7 @@ SSTable::write_entry(const std::string_view key,
     return std::unexpected(StorageError::file_write(path()));
   }
 
-  return {};
+  return write_buffer.size();
 }
 std::expected<void, StorageError> SSTable::ensure_mapped() {
   if (mapped_data_.data() == nullptr) {
@@ -354,4 +369,66 @@ std::expected<SSTable::Footer, StorageError> SSTable::read_footer() {
   footer_ = footer.value();
   return footer_;
 }
+std::expected<size_t, StorageError> SSTable::write_index() {
+  std::vector<std::byte> write_buffer;
+
+  auto append = [&write_buffer](const void *d, size_t len) {
+    auto data = reinterpret_cast<const std::byte *>(d);
+    write_buffer.insert(write_buffer.end(), data, data + len);
+  };
+
+  for (const auto &[key, fpos] : index()) {
+
+    auto keylen = static_cast<uint32_t>(key.size());
+    // Format: [key_len:8][key:key_len][fpos:8]
+    append(&keylen, sizeof(keylen));
+    append(key.data(), key.size());
+    append(&fpos, sizeof(fpos));
+  }
+
+  if (::write(fd_, write_buffer.data(), write_buffer.size()) !=
+      static_cast<ssize_t>(write_buffer.size())) {
+    return std::unexpected(StorageError::file_write(path()));
+  }
+
+  return write_buffer.size();
+}
+std::expected<void, StorageError> SSTable::read_index() {
+  if (!index_.empty()) {
+    return {};
+  }
+  auto idx = ensure_mapped().and_then([&] -> std::expected<void, StorageError> {
+    if (file_size_ < footer_.index_size) {
+      return std::unexpected{StorageError::file_read(path())};
+    }
+
+    size_t read_pos = footer_.index_offset;
+
+    while (index_.size() < footer_.num_index_entries) {
+      uint32_t key_len{0};
+      size_t fpos{0};
+
+      ::memcpy(&key_len, mapped_data_.data() + read_pos, sizeof(key_len));
+
+      std::string key(key_len, '\0');
+      ::memcpy(key.data(), mapped_data_.data() + read_pos + sizeof(uint32_t),
+               key_len);
+
+      ::memcpy(&fpos,
+               mapped_data_.data() + read_pos + sizeof(uint32_t) + key_len,
+               sizeof(fpos));
+      index_.emplace_back(key, fpos);
+
+      read_pos += sizeof(uint32_t) + key_len + sizeof(fpos);
+    }
+
+    return {};
+  });
+
+  if (!idx) {
+    return std::unexpected{idx.error()};
+  }
+  return {};
+}
+
 } // namespace lsm_storage_engine

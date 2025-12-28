@@ -1,10 +1,12 @@
 #include "MemTable.h"
+#include "Constants.h"
 #include "StorageError.h"
 #include "utils/CheckSum.h"
 #include <cassert>
 #include <expected>
 #include <fstream>
 #include <ios>
+#include <print>
 #include <sstream>
 namespace lsm_storage_engine {
 
@@ -33,6 +35,7 @@ std::expected<void, StorageError> MemTable::flush_to_sst(SSTable &sst) {
   // Handle empty table - write valid SSTable with empty key range
   std::string min_key;
   std::string max_key;
+  size_t bytes_written{0};
   if (!map_.empty()) {
     min_key = map_.begin()->first;
     max_key = map_.rbegin()->first;
@@ -42,14 +45,35 @@ std::expected<void, StorageError> MemTable::flush_to_sst(SSTable &sst) {
   if (auto res = sst.write_header(std::move(header)); !res) {
     return std::unexpected{res.error()};
   }
+  bytes_written += sst.header().size;
+
+  size_t i = 0;
+
   for (const auto &[key, val] : map_) {
     auto result = sst.write_entry(key, val);
     if (!result) {
       return std::unexpected(result.error());
     }
+
+    if (i % lsm_constants::kIndexSpace == 0) {
+      sst.index().emplace_back(std::string{key}, bytes_written);
+    }
+    bytes_written += result.value();
+    i++;
   }
+
   SSTable::Footer footer;
-  if (auto res = sst.write_footer(std::move(footer)); !res) {
+  footer.index_offset = bytes_written;
+
+  auto result = sst.write_index();
+  if (!result) {
+    return std::unexpected(result.error());
+  }
+  bytes_written += result.value();
+  footer.index_size = result.value();
+  footer.num_index_entries = sst.index().size();
+
+  if (auto res = sst.write_footer(footer); !res) {
     return std::unexpected{res.error()};
   }
   return {};
