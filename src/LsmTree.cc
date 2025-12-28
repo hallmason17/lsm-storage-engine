@@ -184,7 +184,7 @@ static void cleanup_sst_files(std::vector<SSTable> &ss_tables) {
 std::expected<void, StorageError> LsmTree::maybe_compact() {
   // some random number for testing
   // TODO: come up with a real compaction trigger
-  if (ss_tables_.size() < 12) {
+  if (ss_tables_.size() < 4) {
     return {};
   }
   std::vector<SSTable> new_ssts;
