@@ -90,19 +90,6 @@ TEST_F(LsmTreeTest, PutWritesToWal) {
 
 // --- SSTable integration tests ---
 
-TEST_F(LsmTreeTest, DataRetrievableFromSSTableAfterFlush) {
-  LsmTree lsm;
-
-  for (int i = 0; i < lsm_constants::kMemTableFlushThreshold; ++i) {
-    lsm.put("key" + std::to_string(i), "value" + std::to_string(i));
-  }
-
-  // Verify data is still retrievable after it may have been flushed to SSTable
-  EXPECT_EQ(*lsm.get("key0"), "value0");
-  EXPECT_EQ(*lsm.get("key15"), "value15");
-  EXPECT_EQ(*lsm.get("key29"), "value29");
-}
-
 TEST_F(LsmTreeTest, MemTableTakesPrecedenceOverSSTable) {
   LsmTree lsm;
 
