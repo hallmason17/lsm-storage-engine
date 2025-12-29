@@ -1,12 +1,15 @@
 #include "MemTable.h"
 #include "Constants.h"
 #include "StorageError.h"
+#include "utils/CheckSum.h"
 #include <cassert>
 #include <expected>
+#include <filesystem>
 #include <fstream>
 #include <ios>
-#include <print>
 #include <sstream>
+#include <sys/fcntl.h>
+#include <unistd.h>
 namespace lsm_storage_engine {
 
 std::optional<std::string> MemTable::get(const std::string_view key) const {
@@ -91,26 +94,68 @@ std::expected<void, StorageError> MemTable::flush_to_sst(SSTable &sst) {
 }
 std::expected<void, StorageError>
 MemTable::restore_from_wal(const std::filesystem::path &wal_path) {
-  std::ifstream wal(wal_path);
-  std::string line;
-  if (!wal) {
+  if (!std::filesystem::exists(wal_path)) {
+    return {};
+  }
+
+  int fd = ::open(wal_path.c_str(), O_RDONLY, 0644);
+  if (fd == -1) {
     return std::unexpected(StorageError::file_open(wal_path));
   }
-  while (std::getline(wal, line)) {
-    std::string cmd, key, value;
-    std::istringstream ss(line);
-    if (!(ss >> cmd >> key >> value)) {
+
+  while (true) {
+    uint32_t keylen{0};
+    uint32_t valuelen{0};
+    uint32_t checksum{0};
+    auto bytes_read = ::read(fd, &keylen, sizeof(keylen));
+    if (bytes_read == 0) {
       break;
     }
-    if (cmd == "p") {
-      put(key, value);
-    } else if (cmd == "d") {
-      // TODO: delete
+    if (bytes_read != sizeof(keylen)) {
+      ::close(fd);
+      return std::unexpected(StorageError::file_read(wal_path));
     }
+    if (::read(fd, &valuelen, sizeof(valuelen)) != sizeof(valuelen)) {
+      ::close(fd);
+      return std::unexpected(StorageError::file_read(wal_path));
+    }
+    std::string key(keylen, '\0');
+    std::string value(valuelen, '\0');
+    if (::read(fd, key.data(), keylen) != static_cast<ssize_t>(keylen)) {
+      ::close(fd);
+      return std::unexpected(StorageError::file_read(wal_path));
+    }
+    if (::read(fd, value.data(), valuelen) != static_cast<ssize_t>(valuelen)) {
+      ::close(fd);
+      return std::unexpected(StorageError::file_read(wal_path));
+    }
+    if (::read(fd, &checksum, sizeof(checksum)) != sizeof(checksum)) {
+      ::close(fd);
+      return std::unexpected(StorageError::file_read(wal_path));
+    }
+    std::vector<std::byte> buf;
+    auto append = [&buf](const void *d, size_t len) {
+      auto data = reinterpret_cast<const std::byte *>(d);
+      buf.insert(buf.end(), data, data + len);
+    };
+
+    append(&keylen, sizeof(keylen));
+    append(&valuelen, sizeof(valuelen));
+    append(key.data(), key.size());
+    append(value.data(), value.size());
+
+    auto cs = hash32({reinterpret_cast<const char *>(buf.data()), buf.size()});
+    if (checksum != cs) {
+      ::close(fd);
+      return std::unexpected(
+          StorageError{.kind = StorageError::Kind::Corruption,
+                       .message = "Corrupted WAL entry, checksum mismatch",
+                       .path = wal_path});
+    }
+
+    put(std::move(key), std::move(value));
   }
-  if (wal.bad()) {
-    return std::unexpected(StorageError::file_read(wal_path));
-  }
+  ::close(fd);
   return {};
 }
 } // namespace lsm_storage_engine

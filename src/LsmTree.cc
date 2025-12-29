@@ -290,5 +290,7 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
   }
   return {};
 }
+
+// TODO
 void LsmTree::rm(const std::string &) {}
 } // namespace lsm_storage_engine
