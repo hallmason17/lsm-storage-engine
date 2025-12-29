@@ -478,7 +478,8 @@ std::expected<BloomFilter, StorageError> SSTable::read_bloom_filter() {
   ::memcpy(&bf_size, mapped_data_.data() + file_pos_, sizeof(bf_size));
 
   if (bf_size == 0) {
-    bloom_filter_ = BloomFilter{};
+    BloomFilter bf;
+    bloom_filter_ = bf;
     return bloom_filter_;
   }
 
