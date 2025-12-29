@@ -17,5 +17,5 @@ add_executable(lsm_test
 target_link_options(lsm_test PRIVATE
   $<$<CONFIG:Debug>:-fsanitize=address,undefined>
 )
-target_link_libraries(lsm_test lsm_lib gtest_main)
+target_link_libraries(lsm_test lsm_lib xxHash::xxhash gtest_main)
 

@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <optional>
+#include <print>
 #include <span>
 #include <string>
 #include <sys/mman.h>
@@ -25,7 +26,8 @@ SSTable::SSTable(SSTable &&other) noexcept
       mapped_data_{std::exchange(other.mapped_data_, {})},
       file_size_{std::exchange(other.file_size_, 0)},
       header_{std::move(other.header_)}, footer_{other.footer_},
-      index_{std::move(other.index_)} {}
+      index_{std::move(other.index_)},
+      bloom_filter_{std::move(other.bloom_filter_)} {}
 
 SSTable &SSTable::operator=(SSTable &&other) noexcept {
   if (this != &other) {
@@ -38,6 +40,7 @@ SSTable &SSTable::operator=(SSTable &&other) noexcept {
     header_ = std::move(other.header_);
     footer_ = other.footer_;
     index_ = std::move(other.index_);
+    bloom_filter_ = std::move(other.bloom_filter_);
   }
   return *this;
 }
@@ -65,7 +68,13 @@ SSTable::get(std::string_view key) {
   if (key < header().min_key || key > header().max_key) {
     return std::nullopt;
   }
-  size_t jump_to{header().size};
+  if (bloom_filter_.bits().size() > 0 && !bloom_filter_.contains(key)) {
+    return std::nullopt;
+  }
+  // Calculate the correct position after header and bloom filter
+  size_t bloom_filter_size =
+      sizeof(size_t) + bloom_filter_.bits().size() * sizeof(bool);
+  size_t jump_to{header().size + bloom_filter_size};
   auto it = std::ranges::upper_bound(index_, key, std::ranges::less{},
                                      &IndexEntry::key);
   if (it != index_.begin()) {
@@ -115,6 +124,9 @@ SSTable::open(const std::filesystem::path &path) {
     return std::unexpected{res.error()};
   }
   if (auto res = sst.read_header(); !res) {
+    return std::unexpected{res.error()};
+  }
+  if (auto res = sst.read_bloom_filter(); !res) {
     return std::unexpected{res.error()};
   }
   if (auto res = sst.read_footer(); !res) {
@@ -186,8 +198,11 @@ SSTable::read_entry() const {
 
 std::expected<std::optional<std::pair<std::string, std::string>>, StorageError>
 SSTable::next() {
-  if (file_pos_ < static_cast<off_t>(header().size)) {
-    file_pos_ = static_cast<off_t>(header().size);
+  size_t bloom_filter_size =
+      sizeof(size_t) + bloom_filter_.bits().size() * sizeof(bool);
+  size_t data_start = header().size + bloom_filter_size;
+  if (file_pos_ < static_cast<off_t>(data_start)) {
+    file_pos_ = static_cast<off_t>(data_start);
   }
   auto entry = ensure_mapped().and_then([&] { return read_entry(); });
 
@@ -247,7 +262,7 @@ std::expected<void, StorageError> SSTable::ensure_mapped() {
   return {};
 }
 std::expected<void, StorageError> SSTable::write_header(Header &&header) {
-  header_ = std::move(header);
+  header_ = header;
   std::vector<std::byte> write_buffer;
   auto min_len = static_cast<uint32_t>(header_.min_key.size());
   auto max_len = static_cast<uint32_t>(header_.max_key.size());
@@ -378,7 +393,6 @@ std::expected<size_t, StorageError> SSTable::write_index() {
   };
 
   for (const auto &[key, fpos] : index()) {
-
     auto keylen = static_cast<uint32_t>(key.size());
     // Format: [key_len:8][key:key_len][fpos:8]
     append(&keylen, sizeof(keylen));
@@ -431,4 +445,60 @@ std::expected<void, StorageError> SSTable::read_index() {
   return {};
 }
 
+[[nodiscard]]
+std::expected<size_t, StorageError>
+SSTable::write_bloom_filter(BloomFilter &&bf) {
+  std::vector<std::byte> write_buffer;
+
+  auto append = [&write_buffer](const void *d, size_t len) {
+    auto data = reinterpret_cast<const std::byte *>(d);
+    write_buffer.insert(write_buffer.end(), data, data + len);
+  };
+
+  size_t bf_size = bf.bits().size();
+  assert(bf_size > 0);
+  append(&bf_size, sizeof(size_t));
+
+  for (bool bit : bf.bits()) {
+    append(&bit, sizeof(bit));
+  }
+  if (::write(fd_, write_buffer.data(), write_buffer.size()) !=
+      static_cast<ssize_t>(write_buffer.size())) {
+    return std::unexpected(StorageError::file_write(path()));
+  }
+
+  bloom_filter_ = std::move(bf);
+  return write_buffer.size();
+}
+
+std::expected<BloomFilter, StorageError> SSTable::read_bloom_filter() {
+  // After header
+  file_pos_ = static_cast<off_t>(header_.size);
+  size_t bf_size{0};
+  ::memcpy(&bf_size, mapped_data_.data() + file_pos_, sizeof(bf_size));
+
+  if (bf_size == 0) {
+    return std::unexpected(StorageError{
+        .kind = StorageError::Kind::FileRead,
+        .message = "Bloom filter size is 0",
+        .path = path(),
+    });
+  }
+
+  std::vector<bool> bf_bits(bf_size);
+
+  for (size_t i = 0; i < bf_bits.size(); ++i) {
+    bool byte{0};
+    ::memcpy(&byte,
+             mapped_data_.data() + file_pos_ + sizeof(bf_size) +
+                 i * sizeof(byte),
+             sizeof(byte));
+    bf_bits[i] = (byte != 0);
+  }
+
+  BloomFilter bf{std::move(bf_bits)};
+  bloom_filter_ = std::move(bf);
+
+  return bloom_filter_;
+}
 } // namespace lsm_storage_engine
