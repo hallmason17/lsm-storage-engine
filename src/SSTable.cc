@@ -456,11 +456,11 @@ SSTable::write_bloom_filter(BloomFilter &&bf) {
   };
 
   size_t bf_size = bf.bits().size();
-  assert(bf_size > 0);
   append(&bf_size, sizeof(size_t));
-
-  for (bool bit : bf.bits()) {
-    append(&bit, sizeof(bit));
+  if (bf_size > 0) {
+    for (bool bit : bf.bits()) {
+      append(&bit, sizeof(bit));
+    }
   }
   if (::write(fd_, write_buffer.data(), write_buffer.size()) !=
       static_cast<ssize_t>(write_buffer.size())) {
@@ -478,11 +478,8 @@ std::expected<BloomFilter, StorageError> SSTable::read_bloom_filter() {
   ::memcpy(&bf_size, mapped_data_.data() + file_pos_, sizeof(bf_size));
 
   if (bf_size == 0) {
-    return std::unexpected(StorageError{
-        .kind = StorageError::Kind::FileRead,
-        .message = "Bloom filter size is 0",
-        .path = path(),
-    });
+    bloom_filter_ = BloomFilter{};
+    return bloom_filter_;
   }
 
   std::vector<bool> bf_bits(bf_size);
