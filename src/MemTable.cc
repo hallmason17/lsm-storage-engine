@@ -49,7 +49,7 @@ std::expected<void, StorageError> MemTable::flush_to_sst(SSTable &sst) {
 
   BloomFilter bloom_filter{map_.size()};
   for (const auto &[key, val] : map_) {
-    bloom_filter.add(key);
+    bloom_filter.add(std::string_view{key});
   }
 
   auto bf_res = sst.write_bloom_filter(std::move(bloom_filter));

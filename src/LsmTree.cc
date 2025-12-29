@@ -235,7 +235,7 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
     size_t bf_size = all_entries.size();
     BloomFilter bloom_filter{bf_size};
     for (const auto &[key, val] : all_entries) {
-      bloom_filter.add(key);
+      bloom_filter.add(std::string_view{key});
     }
     auto bf_res = sst->write_bloom_filter(std::move(bloom_filter));
     if (!bf_res) {
