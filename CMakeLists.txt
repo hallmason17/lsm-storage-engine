@@ -26,6 +26,7 @@ add_library(lsm_lib
   src/MemTable.cc
   src/Wal.cc
   src/SSTable.cc
+  src/BloomFilter.cc
 )
 
 target_include_directories(lsm_lib PUBLIC src)

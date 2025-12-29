@@ -3,7 +3,6 @@
 #include "MemTable.h"
 #include "SSTable.h"
 #include "StorageError.h"
-#include "utils/CheckSum.h"
 #include <atomic>
 #include <chrono>
 #include <expected>
@@ -207,79 +206,55 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
       return std::unexpected{res.error()};
     }
     size_t bytes_written{sst->header().size};
-    size_t entry_count{0};
+
+    // First pass: collect all keys for the bloom filter and count entries
+    std::vector<std::pair<std::string, std::string>> all_entries;
     auto lhs = left_table.next();
     auto rhs = right_table.next();
-    // merge sort combine
     while ((lhs && rhs) && (lhs->has_value() || rhs->has_value())) {
       if (!lhs->has_value() && rhs->has_value()) {
-        auto write_res =
-            sst->write_entry(rhs->value().first, rhs->value().second);
-        if (!write_res) {
-          return std::unexpected{write_res.error()};
-        }
-        if (entry_count % lsm_constants::kIndexSpace == 0) {
-          sst->index().emplace_back(std::string{rhs->value().first},
-                                    bytes_written);
-        }
-        bytes_written += write_res.value();
-        entry_count++;
-        rhs = ss_tables_[i + 1].next();
+        all_entries.emplace_back(rhs->value());
+        rhs = right_table.next();
       } else if (!rhs->has_value() && lhs->has_value()) {
-        auto write_res =
-            sst->write_entry(lhs->value().first, lhs->value().second);
-        if (!write_res) {
-          return std::unexpected{write_res.error()};
-        }
-        if (entry_count % lsm_constants::kIndexSpace == 0) {
-          sst->index().emplace_back(std::string{lhs->value().first},
-                                    bytes_written);
-        }
-        bytes_written += write_res.value();
-        entry_count++;
-        lhs = ss_tables_[i].next();
+        all_entries.emplace_back(lhs->value());
+        lhs = left_table.next();
       } else if (lhs->value().first < rhs->value().first) {
-        auto write_res =
-            sst->write_entry(lhs->value().first, lhs->value().second);
-        if (!write_res) {
-          return std::unexpected{write_res.error()};
-        }
-        if (entry_count % lsm_constants::kIndexSpace == 0) {
-          sst->index().emplace_back(std::string{lhs->value().first},
-                                    bytes_written);
-        }
-        bytes_written += write_res.value();
-        entry_count++;
-        lhs = ss_tables_[i].next();
+        all_entries.emplace_back(lhs->value());
+        lhs = left_table.next();
       } else if (rhs->value().first < lhs->value().first) {
-        auto write_res =
-            sst->write_entry(rhs->value().first, rhs->value().second);
-        if (!write_res) {
-          return std::unexpected{write_res.error()};
-        }
-        if (entry_count % lsm_constants::kIndexSpace == 0) {
-          sst->index().emplace_back(std::string{rhs->value().first},
-                                    bytes_written);
-        }
-        bytes_written += write_res.value();
-        entry_count++;
-        rhs = ss_tables_[i + 1].next();
+        all_entries.emplace_back(rhs->value());
+        rhs = right_table.next();
       } else {
         // Keys are equal - keep the newer value (rhs)
-        auto write_res =
-            sst->write_entry(rhs->value().first, rhs->value().second);
-        if (!write_res) {
-          return std::unexpected{write_res.error()};
-        }
-        if (entry_count % lsm_constants::kIndexSpace == 0) {
-          sst->index().emplace_back(std::string{rhs->value().first},
-                                    bytes_written);
-        }
-        bytes_written += write_res.value();
-        entry_count++;
-        lhs = ss_tables_[i].next();
-        rhs = ss_tables_[i + 1].next();
+        all_entries.emplace_back(rhs->value());
+        lhs = left_table.next();
+        rhs = right_table.next();
       }
+    }
+
+    size_t bf_size = all_entries.size();
+    BloomFilter bloom_filter{bf_size};
+    for (const auto &[key, val] : all_entries) {
+      bloom_filter.add(key);
+    }
+    auto bf_res = sst->write_bloom_filter(std::move(bloom_filter));
+    if (!bf_res) {
+      return std::unexpected{bf_res.error()};
+    }
+    bytes_written += bf_res.value();
+
+    // Second pass: write all entries
+    size_t entry_count{0};
+    for (const auto &[key, val] : all_entries) {
+      auto write_res = sst->write_entry(key, val);
+      if (!write_res) {
+        return std::unexpected{write_res.error()};
+      }
+      if (entry_count % lsm_constants::kIndexSpace == 0) {
+        sst->index().emplace_back(std::string{key}, bytes_written);
+      }
+      bytes_written += write_res.value();
+      entry_count++;
     }
     left_table.marked_for_delete_ = true;
     right_table.marked_for_delete_ = true;

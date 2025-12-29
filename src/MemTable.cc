@@ -1,7 +1,6 @@
 #include "MemTable.h"
 #include "Constants.h"
 #include "StorageError.h"
-#include "utils/CheckSum.h"
 #include <cassert>
 #include <expected>
 #include <fstream>
@@ -36,6 +35,7 @@ std::expected<void, StorageError> MemTable::flush_to_sst(SSTable &sst) {
   std::string min_key;
   std::string max_key;
   size_t bytes_written{0};
+
   if (!map_.empty()) {
     min_key = map_.begin()->first;
     max_key = map_.rbegin()->first;
@@ -46,6 +46,17 @@ std::expected<void, StorageError> MemTable::flush_to_sst(SSTable &sst) {
     return std::unexpected{res.error()};
   }
   bytes_written += sst.header().size;
+
+  BloomFilter bloom_filter{map_.size()};
+  for (const auto &[key, val] : map_) {
+    bloom_filter.add(key);
+  }
+
+  auto bf_res = sst.write_bloom_filter(std::move(bloom_filter));
+  if (!bf_res) {
+    return std::unexpected{bf_res.error()};
+  }
+  bytes_written += bf_res.value();
 
   size_t i = 0;
 

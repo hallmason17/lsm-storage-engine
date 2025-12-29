@@ -1,4 +1,5 @@
 #pragma once
+#include "BloomFilter.h"
 #include "Constants.h"
 #include "StorageError.h"
 #include <expected>
@@ -126,12 +127,18 @@ public:
     IndexEntry(std::string k, size_t fpos)
         : key{std::move(k)}, file_position{fpos} {}
   };
+  [[nodiscard]]
   std::expected<Header, StorageError> read_header();
+  [[nodiscard]]
   std::expected<Footer, StorageError> read_footer();
   std::expected<void, StorageError> write_header(Header &&header);
   std::expected<void, StorageError> write_footer(Footer footer);
+  [[nodiscard]]
   std::expected<size_t, StorageError> write_index();
   std::expected<void, StorageError> read_index();
+  [[nodiscard]]
+  std::expected<size_t, StorageError> write_bloom_filter(BloomFilter &&);
+  std::expected<BloomFilter, StorageError> read_bloom_filter();
   [[nodiscard]]
   const Header &header() const {
     return header_;
@@ -155,6 +162,7 @@ private:
   Header header_;
   Footer footer_;
   std::vector<IndexEntry> index_;
+  BloomFilter bloom_filter_;
   // TODO: Add a refcount
 
   /**

@@ -6,7 +6,7 @@ int main() {
     lsm.put("foo", "bar");
     auto bar = lsm.get("foo");
     lsm.put("foo", "bar11");
-    for (int i = 0; i < 1000000; i++) {
+    for (int i = 0; i < 100000; i++) {
       auto key = "key" + std::to_string(i);
       auto value = "value" + std::to_string(i);
       lsm.put(key, value);
@@ -16,11 +16,11 @@ int main() {
                  s.avg_put_time_us, s.max_put_time_us_);
   }
   LsmTree lsm;
-  for (int i = 0; i < 1000000; i++) {
+  for (int i = 0; i < 100000; i++) {
     auto key = "key" + std::to_string(i);
     auto val = lsm.get(key);
     if (val && i % 2000 == 0) {
-      std::println("{}", *val);
+      // std::println("{}", *val);
     }
   }
   auto s = lsm.stats();
