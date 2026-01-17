@@ -1,4 +1,5 @@
 #pragma once
+#include "Block.h"
 #include "BloomFilter.h"
 #include "Constants.h"
 #include "StorageError.h"
@@ -87,6 +88,8 @@ public:
   std::expected<size_t, StorageError>
   write_entry(const std::string_view key, const std::string_view value) const;
 
+  std::expected<size_t, StorageError> write_block(Block &);
+
   bool marked_for_delete_{false};
 
   struct Header {
@@ -163,7 +166,7 @@ private:
   Footer footer_;
   std::vector<IndexEntry> index_;
   BloomFilter bloom_filter_;
-  // TODO: Add a refcount
+  // TODO: Add a refcount. JK, just use a shared_ptr, we are in c++
 
   /**
    * @brief Opens the SSTable file for reading.

@@ -1,5 +1,5 @@
 #include "MemTable.h"
-#include "Constants.h"
+#include "Block.h"
 #include "StorageError.h"
 #include "utils/CheckSum.h"
 #include <cassert>
@@ -61,19 +61,21 @@ std::expected<void, StorageError> MemTable::flush_to_sst(SSTable &sst) {
   }
   bytes_written += bf_res.value();
 
-  size_t i = 0;
-
+  // Write to block first. Once block full, write block to sst and add to index.
   for (const auto &[key, val] : map_) {
-    auto result = sst.write_entry(key, val);
-    if (!result) {
-      return std::unexpected(result.error());
+    Block block;
+    while (!block.is_full()) {
+      block.append(key, val);
     }
 
-    if (i % lsm_constants::kIndexSpace == 0) {
-      sst.index().emplace_back(std::string{key}, bytes_written);
+    // Index entry at the beginning of each block with the block's first key.
+    sst.index().emplace_back(std::string(block.first().value()), bytes_written);
+
+    auto res = sst.write_block(block);
+    if (!res) {
+      return std::unexpected(res.error());
     }
-    bytes_written += result.value();
-    i++;
+    bytes_written += res.value();
   }
 
   SSTable::Footer footer;

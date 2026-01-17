@@ -10,7 +10,6 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <optional>
-#include <print>
 #include <span>
 #include <string>
 #include <sys/mman.h>
@@ -218,35 +217,17 @@ SSTable::next() {
                                   sizeof(uint32_t));
   return {{{std::move(k), std::move(v)}}};
 }
-std::expected<size_t, StorageError>
-SSTable::write_entry(const std::string_view key,
-                     const std::string_view value) const {
-  std::vector<std::byte> write_buffer;
-  auto keylen = static_cast<uint32_t>(key.size());
-  auto valuelen = static_cast<uint32_t>(value.size());
 
-  auto append = [&write_buffer](const void *d, size_t len) {
-    auto data = reinterpret_cast<const std::byte *>(d);
-    write_buffer.insert(write_buffer.end(), data, data + len);
-  };
-
-  append(&keylen, sizeof(keylen));
-  append(&valuelen, sizeof(valuelen));
-  append(key.data(), key.size());
-  append(value.data(), value.size());
-
-  auto cs = hash32({reinterpret_cast<const char *>(write_buffer.data()),
-                    write_buffer.size()});
-
-  append(&cs, sizeof(cs));
-
-  if (::write(fd_, write_buffer.data(), write_buffer.size()) !=
-      static_cast<ssize_t>(write_buffer.size())) {
+std::expected<size_t, StorageError> SSTable::write_block(Block &block) {
+  // Just write the block's data directly. It's already in the disk format.
+  if (::write(fd_, block.data().data(), block.size()) !=
+      static_cast<ssize_t>(block.size())) {
     return std::unexpected(StorageError::file_write(path()));
   }
 
-  return write_buffer.size();
+  return block.size();
 }
+
 std::expected<void, StorageError> SSTable::ensure_mapped() {
   if (mapped_data_.data() == nullptr) {
     file_size_ = std::filesystem::file_size(path());
