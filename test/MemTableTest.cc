@@ -1,15 +1,17 @@
-#include "MemTable.h"
-#include "Constants.h"
-#include "SSTable.h"
-#include "StorageError.h"
-#include <filesystem>
-#include <fstream>
 #include <gtest/gtest.h>
 
-using namespace lsm_storage_engine;
+#include <filesystem>
+#include <fstream>
+
+#include "Constants.h"
+#include "MemTable.h"
+#include "SSTable.h"
+#include "StorageError.h"
+
+using namespace lsm;
 
 class MemTableFlushTest : public ::testing::Test {
-protected:
+ protected:
   std::filesystem::path test_path_ = "test_memtable_flush.sst";
 
   void TearDown() override {
@@ -94,7 +96,7 @@ TEST(MemTableTest, ShouldFlushReturnsFalseWhenBelowThreshold) {
 
 TEST(MemTableTest, ShouldFlushReturnsTrueWhenAboveThreshold) {
   MemTable table;
-  std::string large_value(lsm_constants::kMemTableFlushThreshold + 4, 'x');
+  std::string large_value(constants::kMemTableFlushThreshold + 4, 'x');
   table.put("key", large_value);
   EXPECT_TRUE(table.should_flush());
 }
@@ -122,7 +124,7 @@ TEST(MemTableTest, ClearResetsSize) {
 
 TEST(MemTableTest, ClearResetsShouldFlush) {
   MemTable table;
-  std::string large_value(lsm_constants::kMemTableFlushThreshold + 1, 'x');
+  std::string large_value(lsm::constants::kMemTableFlushThreshold + 1, 'x');
   table.put("key", large_value);
   EXPECT_TRUE(table.should_flush());
 
@@ -134,11 +136,7 @@ TEST(MemTableTest, ClearResetsShouldFlush) {
 
 TEST_F(MemTableFlushTest, FlushToDiskSucceeds) {
   MemTable table;
-<<<<<<< HEAD
   auto sst = SSTable::create().value();
-=======
-  auto sst = SSTable::open(test_path_).value();
->>>>>>> dac5614 (compaction bug fix, some refactoring in lsmtree put for clarity)
   table.put("key1", "value1");
 
   auto result = table.flush_to_sst(sst);
@@ -148,11 +146,7 @@ TEST_F(MemTableFlushTest, FlushToDiskSucceeds) {
 
 TEST_F(MemTableFlushTest, FlushToDiskCreatesFile) {
   MemTable table;
-<<<<<<< HEAD
   auto sst = SSTable::create(test_path_).value();
-=======
-  auto sst = SSTable::open(test_path_).value();
->>>>>>> dac5614 (compaction bug fix, some refactoring in lsmtree put for clarity)
   table.put("foo", "bar");
 
   auto result = table.flush_to_sst(sst);
@@ -175,11 +169,7 @@ TEST_F(MemTableFlushTest, FlushToDiskReturnsErrorForInvalidPath) {
 
 TEST_F(MemTableFlushTest, FlushEmptyTableSucceeds) {
   MemTable table;
-<<<<<<< HEAD
   auto sst = SSTable::create().value();
-=======
-  auto sst = SSTable::open(test_path_).value();
->>>>>>> dac5614 (compaction bug fix, some refactoring in lsmtree put for clarity)
   auto result = table.flush_to_sst(sst);
   EXPECT_TRUE(result.has_value());
 }
@@ -190,7 +180,6 @@ TEST_F(MemTableFlushTest, FlushThenReadViaSSTablSingleEntry) {
   MemTable table;
   table.put("key1", "value1");
 
-<<<<<<< HEAD
   auto sst = SSTable::create().value();
   auto flush_result = table.flush_to_sst(sst);
   ASSERT_TRUE(flush_result.has_value());
@@ -198,14 +187,6 @@ TEST_F(MemTableFlushTest, FlushThenReadViaSSTablSingleEntry) {
   auto sst_read = SSTable::open(sst.path());
   ASSERT_TRUE(sst_read.has_value()) << "Failed to open SSTable";
   auto get_result = sst_read->get("key1");
-=======
-  auto sst = SSTable::open(test_path_).value();
-  auto flush_result = table.flush_to_sst(sst);
-  ASSERT_TRUE(flush_result.has_value());
-
-  SSTable sst_read = SSTable::open(test_path_).value();
-  auto get_result = sst_read.get("key1");
->>>>>>> dac5614 (compaction bug fix, some refactoring in lsmtree put for clarity)
   ASSERT_TRUE(get_result.has_value()) << "SSTable get() returned error";
   ASSERT_TRUE(get_result->has_value()) << "Key not found in SSTable";
   EXPECT_EQ(**get_result, "value1");
@@ -217,7 +198,6 @@ TEST_F(MemTableFlushTest, FlushThenReadViaSSTablMultipleEntries) {
   table.put("banana", "yellow");
   table.put("cherry", "red");
 
-<<<<<<< HEAD
   auto sst = SSTable::create().value();
   auto flush_result = table.flush_to_sst(sst);
   ASSERT_TRUE(flush_result.has_value());
@@ -234,23 +214,6 @@ TEST_F(MemTableFlushTest, FlushThenReadViaSSTablMultipleEntries) {
   EXPECT_EQ(**r2, "yellow");
 
   auto r3 = sst_read->get("cherry");
-=======
-  auto sst = SSTable::open(test_path_).value();
-  auto flush_result = table.flush_to_sst(sst);
-  ASSERT_TRUE(flush_result.has_value());
-
-  SSTable sst_read = SSTable::open(test_path_).value();
-
-  auto r1 = sst_read.get("apple");
-  ASSERT_TRUE(r1.has_value() && r1->has_value());
-  EXPECT_EQ(**r1, "red");
-
-  auto r2 = sst_read.get("banana");
-  ASSERT_TRUE(r2.has_value() && r2->has_value());
-  EXPECT_EQ(**r2, "yellow");
-
-  auto r3 = sst_read.get("cherry");
->>>>>>> dac5614 (compaction bug fix, some refactoring in lsmtree put for clarity)
   ASSERT_TRUE(r3.has_value() && r3->has_value());
   EXPECT_EQ(**r3, "red");
 }
@@ -263,7 +226,6 @@ TEST_F(MemTableFlushTest, FlushPreservesKeyOrder) {
   table.put("alpha", "a");
   table.put("middle", "m");
 
-<<<<<<< HEAD
   auto sst = SSTable::create().value();
   auto flush_result = table.flush_to_sst(sst);
   ASSERT_TRUE(flush_result.has_value());
@@ -277,20 +239,6 @@ TEST_F(MemTableFlushTest, FlushPreservesKeyOrder) {
   EXPECT_EQ(**r1, "a");
 
   auto r2 = sst_read->get("zebra");
-=======
-  auto sst = SSTable::open(test_path_).value();
-  auto flush_result = table.flush_to_sst(sst);
-  ASSERT_TRUE(flush_result.has_value());
-
-  SSTable sst_read = SSTable::open(test_path_).value();
-
-  // Keys should be stored in sorted order (alpha, middle, zebra)
-  auto r1 = sst_read.get("alpha");
-  ASSERT_TRUE(r1.has_value() && r1->has_value());
-  EXPECT_EQ(**r1, "a");
-
-  auto r2 = sst_read.get("zebra");
->>>>>>> dac5614 (compaction bug fix, some refactoring in lsmtree put for clarity)
   ASSERT_TRUE(r2.has_value() && r2->has_value());
   EXPECT_EQ(**r2, "z");
 }

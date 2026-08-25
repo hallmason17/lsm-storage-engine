@@ -2,18 +2,18 @@
 #include <cmath>
 #include <string_view>
 #include <vector>
-namespace lsm_storage_engine {
+namespace lsm {
 class BloomFilter {
-public:
+ public:
   BloomFilter() {}
   BloomFilter(size_t num_items) : bits_(num_items * 10, false) {}
   BloomFilter(std::vector<bool> bits) : bits_{std::move(bits)} {}
 
   void add(const std::string_view key);
   bool contains(const std::string_view key);
-  const std::vector<bool> &bits() const { return bits_; }
+  const std::vector<bool>& bits() const { return bits_; }
 
-private:
+ private:
   /// Optimizes down to 1 bit per bool
   std::vector<bool> bits_;
   size_t num_hashes_{static_cast<size_t>(10 * std::log(2))};
@@ -24,4 +24,4 @@ private:
 
   std::vector<size_t> get_hashes(const std::string_view data) const;
 };
-} // namespace lsm_storage_engine
+}  // namespace lsm

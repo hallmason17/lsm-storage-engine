@@ -1,6 +1,8 @@
+#include <print>
+
 #include "LsmTree.h"
 int main() {
-  using namespace lsm_storage_engine;
+  using namespace lsm;
   {
     LsmTree lsm;
     lsm.put("foo", "bar");
@@ -20,7 +22,7 @@ int main() {
     auto key = "key" + std::to_string(i);
     auto val = lsm.get(key);
     if (val && i % 2000 == 0) {
-      // std::println("{}", *val);
+      std::println("{}", *val);
     }
   }
   auto s = lsm.stats();

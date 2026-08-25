@@ -1,13 +1,15 @@
 #pragma once
-#include "BloomFilter.h"
-#include "Constants.h"
-#include "StorageError.h"
 #include <expected>
 #include <filesystem>
 #include <optional>
 #include <span>
 #include <vector>
-namespace lsm_storage_engine {
+
+#include "Block.h"
+#include "BloomFilter.h"
+#include "Constants.h"
+#include "StorageError.h"
+namespace lsm {
 
 /**
  * @brief Immutable on-disk sorted string table.
@@ -20,7 +22,7 @@ namespace lsm_storage_engine {
  * Read operations are thread-safe. The table is immutable after creation.
  */
 class SSTable {
-public:
+ public:
   SSTable() {}
 
   /**
@@ -36,16 +38,16 @@ public:
    * @param path Path for the new SSTable file.
    * @return SSTable on success, StorageError if the file cannot be created.
    */
-  static std::expected<SSTable, StorageError>
-  create(std::filesystem::path path);
+  static std::expected<SSTable, StorageError> create(
+      std::filesystem::path path);
 
   /**
    * @brief Opens an existing SSTable from the specified path.
    * @param path Path to the SSTable file.
    * @return SSTable on success, StorageError if the file cannot be opened.
    */
-  static std::expected<SSTable, StorageError>
-  open(const std::filesystem::path &);
+  static std::expected<SSTable, StorageError> open(
+      const std::filesystem::path&);
 
   /**
    * @brief Constructs an SSTable with the given path (does not open file).
@@ -56,17 +58,17 @@ public:
   ~SSTable() { close_file(); }
 
   // No copies.
-  SSTable(const SSTable &) = delete;
-  SSTable &operator=(const SSTable &) = delete;
+  SSTable(const SSTable&) = delete;
+  SSTable& operator=(const SSTable&) = delete;
 
   // Moves OK.
-  SSTable(SSTable &&other) noexcept;
-  SSTable &operator=(SSTable &&other) noexcept;
+  SSTable(SSTable&& other) noexcept;
+  SSTable& operator=(SSTable&& other) noexcept;
 
   /**
    * @brief Returns the file path of this SSTable.
    */
-  const std::filesystem::path &path() const { return path_; }
+  const std::filesystem::path& path() const { return path_; }
 
   /**
    * @brief Searches for a key in the SSTable.
@@ -74,8 +76,8 @@ public:
    * @return The value if found, std::nullopt if not found, or StorageError
    *         on I/O failure.
    */
-  std::expected<std::optional<std::string>, StorageError>
-  get(std::string_view key);
+  std::expected<std::optional<std::string>, StorageError> get(
+      std::string_view key);
 
   std::expected<std::optional<std::pair<std::string, std::string>>,
                 StorageError>
@@ -84,8 +86,10 @@ public:
   std::expected<std::optional<std::pair<std::string, std::string>>,
                 StorageError>
   read_entry() const;
-  std::expected<size_t, StorageError>
-  write_entry(const std::string_view key, const std::string_view value) const;
+
+  std::expected<size_t, StorageError> write_block(const Block&);
+
+  void rewind() { file_pos_ = 0; }
 
   bool marked_for_delete_{false};
 
@@ -98,10 +102,10 @@ public:
     size_t size;
     Header() : min_key(), max_key(), size(0) {}
     Header(std::string min, std::string max)
-        : min_key(std::move(min)), max_key(std::move(max)),
+        : min_key(std::move(min)),
+          max_key(std::move(max)),
           size(this->min_key.size() + sizeof(uint32_t) + this->max_key.size() +
                sizeof(uint32_t)) {
-
       // Serialized size in bytes:
       // [num_entries:4][min_key_len:4][min_key][max_key_len:4][max_key]
     }
@@ -112,12 +116,15 @@ public:
     size_t num_index_entries;
     size_t magic_num;
     Footer()
-        : index_offset(0), index_size(0), num_index_entries(0),
-          magic_num(lsm_constants::kMagicNumber) {}
+        : index_offset(0),
+          index_size(0),
+          num_index_entries(0),
+          magic_num(constants::kMagicNumber) {}
     Footer(size_t offset, size_t size, size_t num_entries)
-        : index_offset(offset), index_size(size),
+        : index_offset(offset),
+          index_size(size),
           num_index_entries(num_entries),
-          magic_num(lsm_constants::kMagicNumber) {}
+          magic_num(constants::kMagicNumber) {}
   };
 
   struct IndexEntry {
@@ -131,29 +138,29 @@ public:
   std::expected<Header, StorageError> read_header();
   [[nodiscard]]
   std::expected<Footer, StorageError> read_footer();
-  std::expected<void, StorageError> write_header(Header &&header);
+  std::expected<void, StorageError> write_header(Header&& header);
   std::expected<void, StorageError> write_footer(Footer footer);
   [[nodiscard]]
   std::expected<size_t, StorageError> write_index();
   std::expected<void, StorageError> read_index();
   [[nodiscard]]
-  std::expected<size_t, StorageError> write_bloom_filter(BloomFilter &&);
+  std::expected<size_t, StorageError> write_bloom_filter(BloomFilter&&);
   std::expected<BloomFilter, StorageError> read_bloom_filter();
   [[nodiscard]]
-  const Header &header() const {
+  const Header& header() const {
     return header_;
   }
   [[nodiscard]]
-  const Footer &footer() const {
+  const Footer& footer() const {
     return footer_;
   }
 
   [[nodiscard]]
-  std::vector<IndexEntry> &index() {
+  std::vector<IndexEntry>& index() {
     return index_;
   }
 
-private:
+ private:
   std::filesystem::path path_;
   int fd_{-1};
   off_t file_pos_{0};
@@ -163,7 +170,7 @@ private:
   Footer footer_;
   std::vector<IndexEntry> index_;
   BloomFilter bloom_filter_;
-  // TODO: Add a refcount
+  // TODO: Add a refcount. JK, just use a shared_ptr, we are in c++
 
   /**
    * @brief Opens the SSTable file for reading.
@@ -178,4 +185,4 @@ private:
    */
   void close_file();
 };
-} // namespace lsm_storage_engine
+}  // namespace lsm

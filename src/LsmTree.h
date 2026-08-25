@@ -1,7 +1,4 @@
 #pragma once
-#include "MemTable.h"
-#include "SSTable.h"
-#include "Wal.h"
 #include <atomic>
 #include <filesystem>
 #include <optional>
@@ -10,7 +7,11 @@
 #include <stdexcept>
 #include <string_view>
 #include <vector>
-namespace lsm_storage_engine {
+
+#include "MemTable.h"
+#include "SSTable.h"
+#include "Wal.h"
+namespace lsm {
 
 /**
  * @brief Core LSM-tree storage engine.
@@ -24,13 +25,13 @@ namespace lsm_storage_engine {
  * Read path: MemTable -> SSTables (newest to oldest)
  */
 class LsmTree {
-public:
+ public:
   // What do I even name a WAL?
   LsmTree() : wal_(std::filesystem::path("lsm.wal")) {
     // Restore the memtable from WAL on startup.
     auto result = mem_table_.restore_from_wal(wal_.path());
     if (!result) {
-      std::println("{}", result.error().message);
+      std::println(stderr, "{}", result.error().message);
       throw std::runtime_error("Could not restore state from WAL!");
     }
     if (!load_ssts()) {
@@ -41,12 +42,12 @@ public:
   }
 
   /// Prevent the object from being copied
-  LsmTree(const LsmTree &) = delete;
-  LsmTree &operator=(const LsmTree &) = delete;
+  LsmTree(const LsmTree&) = delete;
+  LsmTree& operator=(const LsmTree&) = delete;
 
   /// Delete move constructors for shared_mutex
-  LsmTree(LsmTree &&) noexcept = delete;
-  LsmTree &operator=(LsmTree &&) noexcept = delete;
+  LsmTree(LsmTree&&) noexcept = delete;
+  LsmTree& operator=(LsmTree&&) noexcept = delete;
 
   /**
    * @brief Retrieve the value of a key
@@ -59,14 +60,15 @@ public:
    * @brief Insert or update a key-value pair
    * @param key Key to insert/update
    * @param value Value to store
+   * @param sync If true, fdatasync the WAL before returning
    */
-  void put(const std::string &key, const std::string &value);
+  void put(const std::string& key, const std::string& value, bool sync = false);
 
   /**
    * @brief Remove a key-value pair
    * @param key Key to remove
    */
-  void rm(const std::string &key);
+  void rm(const std::string& key);
 
   struct Stats {
     unsigned long get_count;
@@ -83,7 +85,7 @@ public:
    */
   Stats stats() const;
 
-private:
+ private:
   MemTable mem_table_;
   Wal wal_;
 
@@ -108,7 +110,7 @@ private:
    * database.
    * @return void on success, StorageError on failure.
    */
-  std::expected<void, StorageError> update_meta(SSTable &sstable);
+  std::expected<void, StorageError> update_meta(SSTable& sstable);
 
   std::expected<void, StorageError> maybe_compact();
 
@@ -123,4 +125,4 @@ private:
   std::atomic<long long> max_put_time_us_{0};
   std::atomic<long long> max_get_time_us_{0};
 };
-} // namespace lsm_storage_engine
+}  // namespace lsm

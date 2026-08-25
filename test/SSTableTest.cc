@@ -1,13 +1,15 @@
-#include "SSTable.h"
-#include "MemTable.h"
-#include <filesystem>
 #include <gtest/gtest.h>
+
+#include <filesystem>
 #include <print>
 
-using namespace lsm_storage_engine;
+#include "MemTable.h"
+#include "SSTable.h"
+
+using namespace lsm;
 
 class SSTableTest : public ::testing::Test {
-protected:
+ protected:
   std::filesystem::path test_path_ = "test_sstable.sst";
 
   void SetUp() override {
@@ -23,25 +25,17 @@ protected:
 
   // Helper to write test data to SSTable via MemTable flush
   void write_test_data(
-      const std::vector<std::pair<std::string, std::string>> &entries) {
-<<<<<<< HEAD
+      const std::vector<std::pair<std::string, std::string>>& entries) {
     auto sst = SSTable::create(test_path_);
     if (!sst) {
       std::println("{}", sst.error().message + sst.error().path.string());
     }
     ASSERT_TRUE(sst.has_value()) << "Failed to create SSTable";
-=======
-    auto sst = SSTable::open(test_path_).value();
->>>>>>> dac5614 (compaction bug fix, some refactoring in lsmtree put for clarity)
     MemTable mem;
-    for (const auto &[key, value] : entries) {
+    for (const auto& [key, value] : entries) {
       mem.put(key, value);
     }
-<<<<<<< HEAD
     auto result = mem.flush_to_sst(sst.value());
-=======
-    auto result = mem.flush_to_sst(sst);
->>>>>>> dac5614 (compaction bug fix, some refactoring in lsmtree put for clarity)
     ASSERT_TRUE(result.has_value()) << "Failed to flush memtable to disk";
   }
 };
@@ -51,7 +45,8 @@ protected:
 TEST_F(SSTableTest, ReadEntryMMap) {
   write_test_data({{"key1", "value1"}});
   auto sst = SSTable::open(test_path_);
-  ASSERT_TRUE(sst.has_value()) << sst.error().message + sst.error().path.string();
+  ASSERT_TRUE(sst.has_value())
+      << sst.error().message + sst.error().path.string();
 
   // Use next() which handles positioning after the header
   auto result = sst->next();
@@ -200,6 +195,34 @@ TEST_F(SSTableTest, ManyEntries) {
 
   // Nonexistent key
   auto missing = sst.get("key100");
+  ASSERT_TRUE(missing.has_value());
+  EXPECT_FALSE(missing->has_value());
+}
+
+TEST_F(SSTableTest, GetAcrossMultipleBlocks) {
+  std::vector<std::pair<std::string, std::string>> entries;
+  for (int i = 0; i < 400; ++i) {
+    entries.emplace_back("key" + std::to_string(i),
+                         "value" + std::to_string(i));
+  }
+  write_test_data(entries);
+  SSTable sst = SSTable::open(test_path_).value();
+
+  EXPECT_GT(sst.index().size(), 1U);
+
+  auto first = sst.get("key0");
+  ASSERT_TRUE(first.has_value() && first->has_value());
+  EXPECT_EQ(**first, "value0");
+
+  auto mid = sst.get("key200");
+  ASSERT_TRUE(mid.has_value() && mid->has_value());
+  EXPECT_EQ(**mid, "value200");
+
+  auto last = sst.get("key399");
+  ASSERT_TRUE(last.has_value() && last->has_value());
+  EXPECT_EQ(**last, "value399");
+
+  auto missing = sst.get("key400");
   ASSERT_TRUE(missing.has_value());
   EXPECT_FALSE(missing->has_value());
 }

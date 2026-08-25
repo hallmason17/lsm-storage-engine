@@ -1,12 +1,13 @@
 #pragma once
-#include "Constants.h"
-#include "SSTable.h"
-#include "StorageError.h"
 #include <expected>
 #include <filesystem>
 #include <map>
 #include <optional>
-namespace lsm_storage_engine {
+
+#include "Constants.h"
+#include "SSTable.h"
+#include "StorageError.h"
+namespace lsm {
 
 /**
  * @brief In-memory sorted key-value store for the LSM-tree.
@@ -21,9 +22,8 @@ namespace lsm_storage_engine {
  * TODO: switch to Skiplist
  */
 class MemTable {
-public:
-  MemTable()
-      : size_(0), flush_threshold_(lsm_constants::kMemTableFlushThreshold) {}
+ public:
+  MemTable() : size_(0), flush_threshold_(constants::kMemTableFlushThreshold) {}
 
   /**
    * @brief Retrieves the value associated with the given key.
@@ -44,8 +44,8 @@ public:
    * @param wal_path Path to the WAL file to replay.
    * @return void on success, StorageError on failure.
    */
-  std::expected<void, StorageError>
-  restore_from_wal(const std::filesystem::path &wal_path);
+  std::expected<void, StorageError> restore_from_wal(
+      const std::filesystem::path& wal_path);
 
   /**
    * @brief Returns the approximate size of the MemTable in bytes.
@@ -71,11 +71,11 @@ public:
    * @param path Destination file path for the SSTable.
    * @return void on success, StorageError on failure.
    */
-  std::expected<void, StorageError> flush_to_sst(SSTable &sst);
+  std::expected<void, StorageError> flush_to_sst(SSTable& sst);
 
-private:
+ private:
   std::map<std::string, std::string> map_;
   size_t size_;
   size_t flush_threshold_;
 };
-} // namespace lsm_storage_engine
+}  // namespace lsm

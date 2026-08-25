@@ -1,9 +1,10 @@
 #pragma once
-#include "StorageError.h"
 #include <expected>
 #include <filesystem>
 #include <string_view>
-namespace lsm_storage_engine {
+
+#include "StorageError.h"
+namespace lsm {
 
 /**
  * @brief Implementation for the Write-Ahead Log.
@@ -13,31 +14,33 @@ namespace lsm_storage_engine {
  * memtable will load everything in this log.
  */
 class Wal {
-public:
+ public:
   explicit Wal(std::filesystem::path filename);
   ~Wal();
 
   /// Managing file handles, so no copies.
-  Wal(const Wal &) = delete;
-  Wal &operator=(const Wal &) = delete;
+  Wal(const Wal&) = delete;
+  Wal& operator=(const Wal&) = delete;
 
   /// Moving resources OK.
-  Wal(Wal &&other) noexcept;
-  Wal &operator=(Wal &&other) noexcept;
+  Wal(Wal&& other) noexcept;
+  Wal& operator=(Wal&& other) noexcept;
 
   /**
-   * @brief Write a message to the log and sync to disk.
-   * @param message The message to append to the log
-   * @return void on success, StorageError on failure.
+   * @brief Append a record to the log.
+   *
+   * Always written to the kernel. fdatasync runs if sync is true, or when
+   * unsynced bytes hit kWalSyncThreshold (group commit).
    */
   std::expected<void, StorageError> write(std::string_view key,
-                                          std::string_view value) const;
+                                          std::string_view value,
+                                          bool sync = false) const;
 
   /**
    * @brief Get the path to the WAL.
    * @return The path where the log is located
    */
-  const std::filesystem::path &path() const { return path_; }
+  const std::filesystem::path& path() const { return path_; }
 
   /**
    * @brief Truncate the WAL to zero bytes.
@@ -46,14 +49,15 @@ public:
   std::expected<void, StorageError> clear() const;
 
   /**
-   * @brief Sync buffered writes to disk.
+   * @brief fdatasync pending WAL bytes to disk.
    * @return void on success, StorageError on failure.
    */
   std::expected<void, StorageError> sync() const;
 
-private:
+ private:
   std::filesystem::path path_;
   int fd_{-1};
+  mutable size_t unsynced_{0};
 
   /**
    * @brief Opens the WAL file for writing.
@@ -66,4 +70,4 @@ private:
    */
   void close_file();
 };
-} // namespace lsm_storage_engine
+}  // namespace lsm

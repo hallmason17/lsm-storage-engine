@@ -1,16 +1,20 @@
 #include "Wal.h"
-#include "StorageError.h"
-#include "utils/CheckSum.h"
-#include <cassert>
-#include <expected>
+
 #include <fcntl.h>
-#include <stdexcept>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include <cassert>
+#include <expected>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
-namespace lsm_storage_engine {
+#include "Constants.h"
+#include "StorageError.h"
+#include "utils/CheckSum.h"
+
+namespace lsm {
 
 Wal::Wal(std::filesystem::path filename) : path_{std::move(filename)} {
   if (!open_file()) {
@@ -20,14 +24,17 @@ Wal::Wal(std::filesystem::path filename) : path_{std::move(filename)} {
 
 Wal::~Wal() { close_file(); }
 
-Wal::Wal(Wal &&other) noexcept
-    : path_{std::move(other.path_)}, fd_{std::exchange(other.fd_, -1)} {}
+Wal::Wal(Wal&& other) noexcept
+    : path_{std::move(other.path_)},
+      fd_{std::exchange(other.fd_, -1)},
+      unsynced_{std::exchange(other.unsynced_, 0)} {}
 
-Wal &Wal::operator=(Wal &&other) noexcept {
+Wal& Wal::operator=(Wal&& other) noexcept {
   if (this != &other) {
     close_file();
     path_ = std::move(other.path_);
     fd_ = std::exchange(other.fd_, -1);
+    unsynced_ = std::exchange(other.unsynced_, 0);
   }
   return *this;
 }
@@ -48,14 +55,14 @@ void Wal::close_file() {
 }
 
 std::expected<void, StorageError> Wal::write(std::string_view key,
-                                             std::string_view value) const {
+                                             std::string_view value,
+                                             bool sync) const {
   std::vector<std::byte> write_buffer;
   auto keylen = static_cast<uint32_t>(key.size());
   auto valuelen = static_cast<uint32_t>(value.size());
 
-<<<<<<< HEAD
-  auto append = [&write_buffer](const void *d, size_t len) {
-    auto data = reinterpret_cast<const std::byte *>(d);
+  auto append = [&write_buffer](const void* d, size_t len) {
+    auto data = reinterpret_cast<const std::byte*>(d);
     write_buffer.insert(write_buffer.end(), data, data + len);
   };
 
@@ -64,7 +71,7 @@ std::expected<void, StorageError> Wal::write(std::string_view key,
   append(key.data(), key.size());
   append(value.data(), value.size());
 
-  auto cs = hash32({reinterpret_cast<const char *>(write_buffer.data()),
+  auto cs = hash32({reinterpret_cast<const char*>(write_buffer.data()),
                     write_buffer.size()});
 
   append(&cs, sizeof(cs));
@@ -73,39 +80,43 @@ std::expected<void, StorageError> Wal::write(std::string_view key,
       static_cast<ssize_t>(write_buffer.size())) {
     return std::unexpected(StorageError::file_write(path()));
   }
-  return {};
-=======
+  unsynced_ += write_buffer.size();
+  if (sync || unsynced_ >= constants::kWalSyncThreshold) {
+    return this->sync();
+  }
+
   assert(fd_ > -1);
 
+  size_t remaining = write_buffer.size();
+  ssize_t written = 0;
   while (remaining > 0) {
-    ssize_t written = ::write(fd_, data, remaining);
+    written = ::write(fd_, write_buffer.data() + written, remaining);
     if (written == -1) {
       return std::unexpected{StorageError::file_write(path())};
     }
-    data += written;
     remaining -= static_cast<size_t>(written);
   }
 
-  return sync();
->>>>>>> dac5614 (compaction bug fix, some refactoring in lsmtree put for clarity)
+  return {};
 }
 
 std::expected<void, StorageError> Wal::sync() const {
-  if (::fsync(fd_) == -1) {
+  if (unsynced_ == 0) {
+    return {};
+  }
+  if (::fdatasync(fd_) == -1) {
     return std::unexpected{StorageError::file_write(path())};
   }
+  unsynced_ = 0;
   return {};
 }
 
-<<<<<<< HEAD
 std::expected<void, StorageError> Wal::clear() const {
-=======
-std::expected<void, StorageError> Wal::clear() {
->>>>>>> dac5614 (compaction bug fix, some refactoring in lsmtree put for clarity)
   if (::ftruncate(fd_, 0) == -1) {
     return std::unexpected{StorageError::file_write(path())};
   }
+  unsynced_ = 0;
   return {};
 }
 
-} // namespace lsm_storage_engine
+}  // namespace lsm

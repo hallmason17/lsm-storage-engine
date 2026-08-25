@@ -1,16 +1,16 @@
 #include "MemTable.h"
-#include "Constants.h"
-#include "StorageError.h"
-#include "utils/CheckSum.h"
+
+#include <sys/fcntl.h>
+#include <unistd.h>
+
 #include <cassert>
 #include <expected>
 #include <filesystem>
-#include <fstream>
-#include <ios>
-#include <sstream>
-#include <sys/fcntl.h>
-#include <unistd.h>
-namespace lsm_storage_engine {
+
+#include "Block.h"
+#include "StorageError.h"
+#include "utils/CheckSum.h"
+namespace lsm {
 
 std::optional<std::string> MemTable::get(const std::string_view key) const {
   auto it = map_.find(std::string(key));
@@ -33,7 +33,7 @@ void MemTable::put(std::string key, std::string value) {
   map_.insert_or_assign(std::move(key), std::move(value));
 }
 
-std::expected<void, StorageError> MemTable::flush_to_sst(SSTable &sst) {
+std::expected<void, StorageError> MemTable::flush_to_sst(SSTable& sst) {
   // Handle empty table - write valid SSTable with empty key range
   std::string min_key;
   std::string max_key;
@@ -51,7 +51,7 @@ std::expected<void, StorageError> MemTable::flush_to_sst(SSTable &sst) {
   bytes_written += sst.header().size;
 
   BloomFilter bloom_filter{map_.size()};
-  for (const auto &[key, val] : map_) {
+  for (const auto& [key, val] : map_) {
     bloom_filter.add(std::string_view{key});
   }
 
@@ -61,19 +61,31 @@ std::expected<void, StorageError> MemTable::flush_to_sst(SSTable &sst) {
   }
   bytes_written += bf_res.value();
 
-  size_t i = 0;
-
-  for (const auto &[key, val] : map_) {
-    auto result = sst.write_entry(key, val);
-    if (!result) {
-      return std::unexpected(result.error());
+  // Write to block first. Once block full, write block to sst and add to index.
+  Block block;
+  for (const auto& [key, val] : map_) {
+    if (block.append(key, val) == 0) {
+      // Index entry at the beginning of each block with the block's first key.
+      sst.index().emplace_back(std::string(block.first().value()),
+                               bytes_written);
+      auto res = sst.write_block(block);
+      if (!res) {
+        return std::unexpected(res.error());
+      }
+      bytes_written += res.value();
+      block = Block{};
+      if (block.append(key, val) == 0) {
+        return std::unexpected(StorageError::file_write(sst.path()));
+      }
     }
-
-    if (i % lsm_constants::kIndexSpace == 0) {
-      sst.index().emplace_back(std::string{key}, bytes_written);
+  }
+  if (block.size() > 0) {
+    sst.index().emplace_back(std::string(block.first().value()), bytes_written);
+    auto res = sst.write_block(block);
+    if (!res) {
+      return std::unexpected(res.error());
     }
-    bytes_written += result.value();
-    i++;
+    bytes_written += res.value();
   }
 
   SSTable::Footer footer;
@@ -92,8 +104,8 @@ std::expected<void, StorageError> MemTable::flush_to_sst(SSTable &sst) {
   }
   return {};
 }
-std::expected<void, StorageError>
-MemTable::restore_from_wal(const std::filesystem::path &wal_path) {
+std::expected<void, StorageError> MemTable::restore_from_wal(
+    const std::filesystem::path& wal_path) {
   if (!std::filesystem::exists(wal_path)) {
     return {};
   }
@@ -134,8 +146,8 @@ MemTable::restore_from_wal(const std::filesystem::path &wal_path) {
       return std::unexpected(StorageError::file_read(wal_path));
     }
     std::vector<std::byte> buf;
-    auto append = [&buf](const void *d, size_t len) {
-      auto data = reinterpret_cast<const std::byte *>(d);
+    auto append = [&buf](const void* d, size_t len) {
+      auto data = reinterpret_cast<const std::byte*>(d);
       buf.insert(buf.end(), data, data + len);
     };
 
@@ -144,7 +156,7 @@ MemTable::restore_from_wal(const std::filesystem::path &wal_path) {
     append(key.data(), key.size());
     append(value.data(), value.size());
 
-    auto cs = hash32({reinterpret_cast<const char *>(buf.data()), buf.size()});
+    auto cs = hash32({reinterpret_cast<const char*>(buf.data()), buf.size()});
     if (checksum != cs) {
       ::close(fd);
       return std::unexpected(
@@ -158,4 +170,4 @@ MemTable::restore_from_wal(const std::filesystem::path &wal_path) {
   ::close(fd);
   return {};
 }
-} // namespace lsm_storage_engine
+}  // namespace lsm
