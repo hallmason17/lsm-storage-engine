@@ -1,14 +1,17 @@
 #include "Wal.h"
-#include "StorageError.h"
-#include "utils/CheckSum.h"
-#include <cassert>
-#include <expected>
+
 #include <fcntl.h>
-#include <stdexcept>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include <cassert>
+#include <expected>
+#include <stdexcept>
 #include <utility>
 #include <vector>
+
+#include "StorageError.h"
+#include "utils/CheckSum.h"
 
 namespace lsm {
 
@@ -20,10 +23,10 @@ Wal::Wal(std::filesystem::path filename) : path_{std::move(filename)} {
 
 Wal::~Wal() { close_file(); }
 
-Wal::Wal(Wal &&other) noexcept
+Wal::Wal(Wal&& other) noexcept
     : path_{std::move(other.path_)}, fd_{std::exchange(other.fd_, -1)} {}
 
-Wal &Wal::operator=(Wal &&other) noexcept {
+Wal& Wal::operator=(Wal&& other) noexcept {
   if (this != &other) {
     close_file();
     path_ = std::move(other.path_);
@@ -53,8 +56,8 @@ std::expected<void, StorageError> Wal::write(std::string_view key,
   auto keylen = static_cast<uint32_t>(key.size());
   auto valuelen = static_cast<uint32_t>(value.size());
 
-  auto append = [&write_buffer](const void *d, size_t len) {
-    auto data = reinterpret_cast<const std::byte *>(d);
+  auto append = [&write_buffer](const void* d, size_t len) {
+    auto data = reinterpret_cast<const std::byte*>(d);
     write_buffer.insert(write_buffer.end(), data, data + len);
   };
 
@@ -63,7 +66,7 @@ std::expected<void, StorageError> Wal::write(std::string_view key,
   append(key.data(), key.size());
   append(value.data(), value.size());
 
-  auto cs = hash32({reinterpret_cast<const char *>(write_buffer.data()),
+  auto cs = hash32({reinterpret_cast<const char*>(write_buffer.data()),
                     write_buffer.size()});
 
   append(&cs, sizeof(cs));
@@ -89,4 +92,4 @@ std::expected<void, StorageError> Wal::clear() const {
   return {};
 }
 
-} // namespace lsm
+}  // namespace lsm

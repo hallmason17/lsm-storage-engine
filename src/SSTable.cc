@@ -1,35 +1,40 @@
 #include "SSTable.h"
-#include "Constants.h"
-#include "StorageError.h"
-#include "utils/CheckSum.h"
+
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include <algorithm>
-#include <iterator>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <expected>
-#include <fcntl.h>
 #include <filesystem>
+#include <iterator>
 #include <optional>
 #include <span>
 #include <string>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <utility>
 #include <vector>
+
+#include "Constants.h"
+#include "StorageError.h"
+#include "utils/CheckSum.h"
 namespace lsm {
 
-SSTable::SSTable(SSTable &&other) noexcept
-    : path_{std::move(other.path_)}, fd_{std::exchange(other.fd_, -1)},
+SSTable::SSTable(SSTable&& other) noexcept
+    : path_{std::move(other.path_)},
+      fd_{std::exchange(other.fd_, -1)},
       file_pos_{std::exchange(other.file_pos_, 0)},
       mapped_data_{std::exchange(other.mapped_data_, {})},
       file_size_{std::exchange(other.file_size_, 0)},
-      header_{std::move(other.header_)}, footer_{other.footer_},
+      header_{std::move(other.header_)},
+      footer_{other.footer_},
       index_{std::move(other.index_)},
       bloom_filter_{std::move(other.bloom_filter_)} {}
 
-SSTable &SSTable::operator=(SSTable &&other) noexcept {
+SSTable& SSTable::operator=(SSTable&& other) noexcept {
   if (this != &other) {
     close_file();
     path_ = std::move(other.path_);
@@ -63,8 +68,8 @@ void SSTable::close_file() {
   }
 }
 
-std::expected<std::optional<std::string>, StorageError>
-SSTable::get(std::string_view key) {
+std::expected<std::optional<std::string>, StorageError> SSTable::get(
+    std::string_view key) {
   if (key < header().min_key || key > header().max_key) {
     return std::nullopt;
   }
@@ -81,8 +86,9 @@ SSTable::get(std::string_view key) {
   }
   --it;
   const size_t start = it->file_position;
-  const size_t end = std::next(it) != index_.end() ? std::next(it)->file_position
-                                                   : footer().index_offset;
+  const size_t end = std::next(it) != index_.end()
+                         ? std::next(it)->file_position
+                         : footer().index_offset;
   if (end < start) {
     return std::unexpected(StorageError{
         .kind = StorageError::Kind::Corruption,
@@ -111,8 +117,8 @@ std::expected<SSTable, StorageError> SSTable::create() {
   }
   return sst;
 }
-std::expected<SSTable, StorageError>
-SSTable::create(std::filesystem::path path) {
+std::expected<SSTable, StorageError> SSTable::create(
+    std::filesystem::path path) {
   SSTable sst;
   sst.path_ = std::move(path);
   if (auto res = sst.open_file(); !res) {
@@ -120,8 +126,8 @@ SSTable::create(std::filesystem::path path) {
   }
   return sst;
 }
-std::expected<SSTable, StorageError>
-SSTable::open(const std::filesystem::path &path) {
+std::expected<SSTable, StorageError> SSTable::open(
+    const std::filesystem::path& path) {
   SSTable sst{path};
   if (auto res = sst.open_file(); !res) {
     return std::unexpected{res.error()};
@@ -189,7 +195,7 @@ SSTable::read_entry() const {
   auto datalen =
       static_cast<uint32_t>(2 * sizeof(uint32_t) + keylen + valuelen);
   auto checksum =
-      hash32({reinterpret_cast<const char *>(mapped_data_.data() + file_pos_),
+      hash32({reinterpret_cast<const char*>(mapped_data_.data() + file_pos_),
               datalen});
 
   if (file_checksum != checksum) {
@@ -215,9 +221,8 @@ SSTable::next() {
   if (!entry) {
     return std::unexpected(entry.error());
   }
-  if (!entry->has_value())
-    return std::nullopt;
-  auto &[k, v] = entry->value();
+  if (!entry->has_value()) return std::nullopt;
+  auto& [k, v] = entry->value();
 
   // [keysize][valuesize][key][val][checksum]
   file_pos_ += static_cast<off_t>(sizeof(uint32_t) * 2 + k.size() + v.size() +
@@ -225,7 +230,7 @@ SSTable::next() {
   return {{{std::move(k), std::move(v)}}};
 }
 
-std::expected<size_t, StorageError> SSTable::write_block(const Block &block) {
+std::expected<size_t, StorageError> SSTable::write_block(const Block& block) {
   // Just write the block's data directly. It's already in the disk format.
   if (::write(fd_, block.data().data(), block.size()) !=
       static_cast<ssize_t>(block.size())) {
@@ -239,24 +244,24 @@ std::expected<void, StorageError> SSTable::ensure_mapped() {
   if (mapped_data_.data() == nullptr) {
     file_size_ = std::filesystem::file_size(path());
     if (file_size_ > 0) {
-      void *addr = ::mmap(nullptr, file_size_, PROT_READ, MAP_PRIVATE, fd_, 0);
+      void* addr = ::mmap(nullptr, file_size_, PROT_READ, MAP_PRIVATE, fd_, 0);
       if (addr == MAP_FAILED) {
         return std::unexpected(StorageError::file_read(path_.string()));
       }
       mapped_data_ =
-          std::span<std::byte>{static_cast<std::byte *>(addr), file_size_};
+          std::span<std::byte>{static_cast<std::byte*>(addr), file_size_};
     }
   }
   return {};
 }
-std::expected<void, StorageError> SSTable::write_header(Header &&header) {
+std::expected<void, StorageError> SSTable::write_header(Header&& header) {
   header_ = header;
   std::vector<std::byte> write_buffer;
   auto min_len = static_cast<uint32_t>(header_.min_key.size());
   auto max_len = static_cast<uint32_t>(header_.max_key.size());
 
-  auto append = [&write_buffer](const void *d, size_t len) {
-    auto data = reinterpret_cast<const std::byte *>(d);
+  auto append = [&write_buffer](const void* d, size_t len) {
+    auto data = reinterpret_cast<const std::byte*>(d);
     write_buffer.insert(write_buffer.end(), data, data + len);
   };
 
@@ -287,10 +292,10 @@ std::expected<SSTable::Header, StorageError> SSTable::read_header() {
                  mapped_data_.data() + file_pos_ + sizeof(uint32_t),
                  min_key_len);
 
-        ::memcpy(&max_key_len,
-                 mapped_data_.data() + file_pos_ + sizeof(uint32_t) +
-                     min_key_len,
-                 sizeof(max_key_len));
+        ::memcpy(
+            &max_key_len,
+            mapped_data_.data() + file_pos_ + sizeof(uint32_t) + min_key_len,
+            sizeof(max_key_len));
         std::string max_key(max_key_len, '\0');
 
         ::memcpy(max_key.data(),
@@ -311,8 +316,8 @@ std::expected<void, StorageError> SSTable::write_footer(Footer footer) {
   footer_ = footer;
   std::vector<std::byte> write_buffer;
 
-  auto append = [&write_buffer](const void *d, size_t len) {
-    auto data = reinterpret_cast<const std::byte *>(d);
+  auto append = [&write_buffer](const void* d, size_t len) {
+    auto data = reinterpret_cast<const std::byte*>(d);
     write_buffer.insert(write_buffer.end(), data, data + len);
   };
 
@@ -375,12 +380,12 @@ std::expected<SSTable::Footer, StorageError> SSTable::read_footer() {
 std::expected<size_t, StorageError> SSTable::write_index() {
   std::vector<std::byte> write_buffer;
 
-  auto append = [&write_buffer](const void *d, size_t len) {
-    auto data = reinterpret_cast<const std::byte *>(d);
+  auto append = [&write_buffer](const void* d, size_t len) {
+    auto data = reinterpret_cast<const std::byte*>(d);
     write_buffer.insert(write_buffer.end(), data, data + len);
   };
 
-  for (const auto &[key, fpos] : index()) {
+  for (const auto& [key, fpos] : index()) {
     auto keylen = static_cast<uint32_t>(key.size());
     // Format: [key_len:8][key:key_len][fpos:8]
     append(&keylen, sizeof(keylen));
@@ -434,12 +439,12 @@ std::expected<void, StorageError> SSTable::read_index() {
 }
 
 [[nodiscard]]
-std::expected<size_t, StorageError>
-SSTable::write_bloom_filter(BloomFilter &&bf) {
+std::expected<size_t, StorageError> SSTable::write_bloom_filter(
+    BloomFilter&& bf) {
   std::vector<std::byte> write_buffer;
 
-  auto append = [&write_buffer](const void *d, size_t len) {
-    auto data = reinterpret_cast<const std::byte *>(d);
+  auto append = [&write_buffer](const void* d, size_t len) {
+    auto data = reinterpret_cast<const std::byte*>(d);
     write_buffer.insert(write_buffer.end(), data, data + len);
   };
 
@@ -475,10 +480,10 @@ std::expected<BloomFilter, StorageError> SSTable::read_bloom_filter() {
 
   for (size_t i = 0; i < bf_bits.size(); ++i) {
     bool byte{0};
-    ::memcpy(&byte,
-             mapped_data_.data() + file_pos_ + sizeof(bf_size) +
-                 i * sizeof(byte),
-             sizeof(byte));
+    ::memcpy(
+        &byte,
+        mapped_data_.data() + file_pos_ + sizeof(bf_size) + i * sizeof(byte),
+        sizeof(byte));
     bf_bits[i] = (byte != 0);
   }
 
@@ -487,4 +492,4 @@ std::expected<BloomFilter, StorageError> SSTable::read_bloom_filter() {
 
   return bloom_filter_;
 }
-} // namespace lsm
+}  // namespace lsm

@@ -1,8 +1,7 @@
 #include "LsmTree.h"
-#include "Constants.h"
-#include "MemTable.h"
-#include "SSTable.h"
-#include "StorageError.h"
+
+#include <unistd.h>
+
 #include <atomic>
 #include <chrono>
 #include <expected>
@@ -13,7 +12,11 @@
 #include <ranges>
 #include <shared_mutex>
 #include <stdexcept>
-#include <unistd.h>
+
+#include "Constants.h"
+#include "MemTable.h"
+#include "SSTable.h"
+#include "StorageError.h"
 namespace lsm {
 std::optional<std::string> LsmTree::get(const std::string_view key) {
   auto start = std::chrono::high_resolution_clock::now();
@@ -25,7 +28,7 @@ std::optional<std::string> LsmTree::get(const std::string_view key) {
     if (auto val = mem_table_.get(key)) {
       result = *val;
     } else {
-      for (auto &sst : ss_tables_ | std::views::reverse) {
+      for (auto& sst : ss_tables_ | std::views::reverse) {
         auto res = sst.get(key);
 
         // Check the expected and the optional!!!
@@ -76,11 +79,10 @@ std::expected<void, StorageError> LsmTree::flush_memtable() {
           });
   return result;
 }
-void LsmTree::put(const std::string &key, const std::string &value) {
+void LsmTree::put(const std::string& key, const std::string& value) {
   auto start = std::chrono::high_resolution_clock::now();
 
   {
-
     // Lock to ensure these two operations are atomic.
     std::unique_lock lock(rwlock_);
     if (!wal_.write(key, value)) {
@@ -160,7 +162,7 @@ LsmTree::Stats LsmTree::stats() const {
       .max_get_time_us_ = max_get_us,
   };
 }
-std::expected<void, StorageError> LsmTree::update_meta(SSTable &sstable) {
+std::expected<void, StorageError> LsmTree::update_meta(SSTable& sstable) {
   std::ofstream metafile("lsm.meta", std::ios::app);
   if (!metafile.is_open()) {
     return std::unexpected(StorageError::file_open("lsm.meta"));
@@ -172,8 +174,8 @@ std::expected<void, StorageError> LsmTree::update_meta(SSTable &sstable) {
   return {};
 }
 
-static void cleanup_sst_files(std::vector<SSTable> &ss_tables) {
-  for (auto &sst : ss_tables) {
+static void cleanup_sst_files(std::vector<SSTable>& ss_tables) {
+  for (auto& sst : ss_tables) {
     if (sst.marked_for_delete_) {
       std::filesystem::remove(sst.path());
     }
@@ -193,8 +195,8 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
     if (!sst) {
       return std::unexpected(sst.error());
     }
-    SSTable &left_table = ss_tables_[i];
-    SSTable &right_table = ss_tables_[i + 1];
+    SSTable& left_table = ss_tables_[i];
+    SSTable& right_table = ss_tables_[i + 1];
     auto min_key = left_table.header().min_key < right_table.header().min_key
                        ? left_table.header().min_key
                        : right_table.header().min_key;
@@ -237,7 +239,7 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
 
     size_t bf_size = all_entries.size();
     BloomFilter bloom_filter{bf_size};
-    for (const auto &[key, val] : all_entries) {
+    for (const auto& [key, val] : all_entries) {
       bloom_filter.add(std::string_view{key});
     }
     auto bf_res = sst->write_bloom_filter(std::move(bloom_filter));
@@ -248,7 +250,7 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
 
     // Second pass: write all entries as blocks
     Block block;
-    for (const auto &[key, val] : all_entries) {
+    for (const auto& [key, val] : all_entries) {
       if (block.append(key, val) == 0) {
         sst->index().emplace_back(std::string(block.first().value()),
                                   bytes_written);
@@ -298,7 +300,7 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
 
   std::filesystem::resize_file("lsm.meta", 0);
 
-  for (auto &sst : ss_tables_) {
+  for (auto& sst : ss_tables_) {
     auto res = update_meta(sst);
     if (!res) {
       return std::unexpected(res.error());
@@ -308,5 +310,5 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
 }
 
 // TODO
-void LsmTree::rm(const std::string &) {}
-} // namespace lsm
+void LsmTree::rm(const std::string&) {}
+}  // namespace lsm

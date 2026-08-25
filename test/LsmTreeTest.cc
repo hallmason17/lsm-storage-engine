@@ -1,13 +1,15 @@
-#include "LsmTree.h"
-#include "Constants.h"
+#include <gtest/gtest.h>
+
 #include <filesystem>
 #include <fstream>
-#include <gtest/gtest.h>
+
+#include "Constants.h"
+#include "LsmTree.h"
 
 using namespace lsm;
 
 class LsmTreeTest : public ::testing::Test {
-protected:
+ protected:
   std::filesystem::path wal_path_ = "lsm.wal";
 
   void SetUp() override {
@@ -17,11 +19,11 @@ protected:
 
   void TearDown() override { cleanup_test_files(); }
 
-private:
+ private:
   void cleanup_test_files() {
     std::filesystem::remove(wal_path_);
     // Remove any SST files created during tests
-    for (const auto &entry :
+    for (const auto& entry :
          std::filesystem::directory_iterator(std::filesystem::current_path())) {
       if (entry.path().extension() == ".sst") {
         std::filesystem::remove(entry.path());
@@ -73,11 +75,11 @@ TEST_F(LsmTreeTest, PutWritesToWal) {
   ASSERT_TRUE(file.good());
 
   uint32_t keylen = 0, valuelen = 0;
-  file.read(reinterpret_cast<char *>(&keylen), sizeof(keylen));
-  file.read(reinterpret_cast<char *>(&valuelen), sizeof(valuelen));
+  file.read(reinterpret_cast<char*>(&keylen), sizeof(keylen));
+  file.read(reinterpret_cast<char*>(&valuelen), sizeof(valuelen));
 
-  EXPECT_EQ(keylen, 3);   // "key"
-  EXPECT_EQ(valuelen, 5); // "value"
+  EXPECT_EQ(keylen, 3);    // "key"
+  EXPECT_EQ(valuelen, 5);  // "value"
 
   std::string key(keylen, '\0');
   std::string value(valuelen, '\0');
@@ -113,10 +115,10 @@ TEST_F(LsmTreeTest, MultipleFlushesMaintainData) {
   std::string large_value(constants::kMemTableFlushThreshold, 'x');
 
   lsm.put("batch1_key", "batch1_value");
-  lsm.put("trigger1", large_value); // Triggers first flush
+  lsm.put("trigger1", large_value);  // Triggers first flush
 
   lsm.put("batch2_key", "batch2_value");
-  lsm.put("trigger2", large_value); // Triggers second flush
+  lsm.put("trigger2", large_value);  // Triggers second flush
 
   lsm.put("batch3_key", "batch3_value");
 
@@ -149,7 +151,7 @@ TEST_F(LsmTreeTest, GetMissingKeyAfterFlush) {
   LsmTree lsm;
 
   std::string large_value(constants::kMemTableFlushThreshold, 'x');
-  lsm.put("exists", large_value); // Triggers flush
+  lsm.put("exists", large_value);  // Triggers flush
 
   // Key that was never inserted should return nullopt
   auto result = lsm.get("nonexistent");
@@ -289,7 +291,7 @@ TEST_F(LsmTreeTest, CompactionReducesSSTableCount) {
 
   // Count SST files after compaction
   int sst_count = 0;
-  for (const auto &entry :
+  for (const auto& entry :
        std::filesystem::directory_iterator(std::filesystem::current_path())) {
     if (entry.path().extension() == ".sst") {
       ++sst_count;
@@ -317,7 +319,7 @@ TEST_F(LsmTreeTest, DataSurvivesRestartAfterCompaction) {
     lsm.put("trigger3", large_value);
 
     lsm.put("persistent_key4", "persistent_value4");
-    lsm.put("trigger4", large_value); // Triggers compaction
+    lsm.put("trigger4", large_value);  // Triggers compaction
   }
 
   // Second session: verify data persisted

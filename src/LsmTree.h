@@ -1,7 +1,4 @@
 #pragma once
-#include "MemTable.h"
-#include "SSTable.h"
-#include "Wal.h"
 #include <atomic>
 #include <filesystem>
 #include <optional>
@@ -10,6 +7,10 @@
 #include <stdexcept>
 #include <string_view>
 #include <vector>
+
+#include "MemTable.h"
+#include "SSTable.h"
+#include "Wal.h"
 namespace lsm {
 
 /**
@@ -24,7 +25,7 @@ namespace lsm {
  * Read path: MemTable -> SSTables (newest to oldest)
  */
 class LsmTree {
-public:
+ public:
   // What do I even name a WAL?
   LsmTree() : wal_(std::filesystem::path("lsm.wal")) {
     // Restore the memtable from WAL on startup.
@@ -41,12 +42,12 @@ public:
   }
 
   /// Prevent the object from being copied
-  LsmTree(const LsmTree &) = delete;
-  LsmTree &operator=(const LsmTree &) = delete;
+  LsmTree(const LsmTree&) = delete;
+  LsmTree& operator=(const LsmTree&) = delete;
 
   /// Delete move constructors for shared_mutex
-  LsmTree(LsmTree &&) noexcept = delete;
-  LsmTree &operator=(LsmTree &&) noexcept = delete;
+  LsmTree(LsmTree&&) noexcept = delete;
+  LsmTree& operator=(LsmTree&&) noexcept = delete;
 
   /**
    * @brief Retrieve the value of a key
@@ -60,13 +61,13 @@ public:
    * @param key Key to insert/update
    * @param value Value to store
    */
-  void put(const std::string &key, const std::string &value);
+  void put(const std::string& key, const std::string& value);
 
   /**
    * @brief Remove a key-value pair
    * @param key Key to remove
    */
-  void rm(const std::string &key);
+  void rm(const std::string& key);
 
   struct Stats {
     unsigned long get_count;
@@ -83,7 +84,7 @@ public:
    */
   Stats stats() const;
 
-private:
+ private:
   MemTable mem_table_;
   Wal wal_;
 
@@ -108,7 +109,7 @@ private:
    * database.
    * @return void on success, StorageError on failure.
    */
-  std::expected<void, StorageError> update_meta(SSTable &sstable);
+  std::expected<void, StorageError> update_meta(SSTable& sstable);
 
   std::expected<void, StorageError> maybe_compact();
 
@@ -123,4 +124,4 @@ private:
   std::atomic<long long> max_put_time_us_{0};
   std::atomic<long long> max_get_time_us_{0};
 };
-} // namespace lsm
+}  // namespace lsm

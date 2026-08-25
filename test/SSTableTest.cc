@@ -1,13 +1,15 @@
-#include "SSTable.h"
-#include "MemTable.h"
-#include <filesystem>
 #include <gtest/gtest.h>
+
+#include <filesystem>
 #include <print>
+
+#include "MemTable.h"
+#include "SSTable.h"
 
 using namespace lsm;
 
 class SSTableTest : public ::testing::Test {
-protected:
+ protected:
   std::filesystem::path test_path_ = "test_sstable.sst";
 
   void SetUp() override {
@@ -23,14 +25,14 @@ protected:
 
   // Helper to write test data to SSTable via MemTable flush
   void write_test_data(
-      const std::vector<std::pair<std::string, std::string>> &entries) {
+      const std::vector<std::pair<std::string, std::string>>& entries) {
     auto sst = SSTable::create(test_path_);
     if (!sst) {
       std::println("{}", sst.error().message + sst.error().path.string());
     }
     ASSERT_TRUE(sst.has_value()) << "Failed to create SSTable";
     MemTable mem;
-    for (const auto &[key, value] : entries) {
+    for (const auto& [key, value] : entries) {
       mem.put(key, value);
     }
     auto result = mem.flush_to_sst(sst.value());

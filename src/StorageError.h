@@ -8,16 +8,16 @@ struct StorageError {
   std::string message;
   std::filesystem::path path;
 
-  static StorageError file_open(const std::filesystem::path &path) {
+  static StorageError file_open(const std::filesystem::path& path) {
     return {Kind::FileOpen, "Failed to open file", path};
   }
 
-  static StorageError file_write(const std::filesystem::path &path) {
+  static StorageError file_write(const std::filesystem::path& path) {
     return {Kind::FileWrite, "Could not write to file", path};
   }
 
-  static StorageError file_read(const std::filesystem::path &path) {
+  static StorageError file_read(const std::filesystem::path& path) {
     return {Kind::FileRead, "Failed to read file", path};
   }
 };
-} // namespace lsm
+}  // namespace lsm

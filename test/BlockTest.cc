@@ -1,7 +1,9 @@
+#include <gtest/gtest.h>
+
+#include <string>
+
 #include "Block.h"
 #include "Constants.h"
-#include <gtest/gtest.h>
-#include <string>
 
 using namespace lsm;
 

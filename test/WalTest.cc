@@ -1,10 +1,11 @@
-#include "Wal.h"
 #include <gtest/gtest.h>
+
+#include "Wal.h"
 
 using namespace lsm;
 
 class WalTest : public ::testing::Test {
-protected:
+ protected:
   std::filesystem::path test_path_ = "test_wal.log";
 
   void TearDown() override { std::filesystem::remove(test_path_); }

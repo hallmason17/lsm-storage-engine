@@ -1,16 +1,17 @@
 #include "BloomFilter.h"
-#include "utils/CheckSum.h"
+
 #include <string>
+
+#include "utils/CheckSum.h"
 namespace lsm {
 void BloomFilter::add(const std::string_view key) {
   for (const auto bit : get_hashes(key)) {
     bits_[bit] = true;
   }
-} // namespace lsm_storage_engine
+}  // namespace lsm_storage_engine
 bool BloomFilter::contains(const std::string_view key) {
   for (const auto bit : get_hashes(key)) {
-    if (!bits_[bit])
-      return false;
+    if (!bits_[bit]) return false;
   }
   return true;
 }
@@ -33,4 +34,4 @@ std::vector<size_t> BloomFilter::get_hashes(const std::string_view data) const {
   }
   return indices;
 }
-} // namespace lsm
+}  // namespace lsm

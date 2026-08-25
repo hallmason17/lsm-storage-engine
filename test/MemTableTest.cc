@@ -1,15 +1,17 @@
-#include "MemTable.h"
-#include "Constants.h"
-#include "SSTable.h"
-#include "StorageError.h"
+#include <gtest/gtest.h>
+
 #include <filesystem>
 #include <fstream>
-#include <gtest/gtest.h>
+
+#include "Constants.h"
+#include "MemTable.h"
+#include "SSTable.h"
+#include "StorageError.h"
 
 using namespace lsm;
 
 class MemTableFlushTest : public ::testing::Test {
-protected:
+ protected:
   std::filesystem::path test_path_ = "test_memtable_flush.sst";
 
   void TearDown() override {

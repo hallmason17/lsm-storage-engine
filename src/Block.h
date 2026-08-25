@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Constants.h"
-#include "StorageError.h"
 #include <expected>
 #include <optional>
 #include <span>
@@ -9,10 +7,13 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+
+#include "Constants.h"
+#include "StorageError.h"
 namespace lsm {
 
 class Block {
-public:
+ public:
   explicit Block() {}
 
   /**
@@ -27,14 +28,14 @@ public:
    */
   static std::expected<std::optional<std::pair<std::string, std::string>>,
                        StorageError>
-  decode_entry(std::span<const std::byte> data, size_t &offset);
+  decode_entry(std::span<const std::byte> data, size_t& offset);
 
   /**
    * @brief Search a block's bytes for a key.
    * @return The value if found, nullopt if not, or StorageError on corruption.
    */
-  static std::expected<std::optional<std::string>, StorageError>
-  find(std::span<const std::byte> data, std::string_view key);
+  static std::expected<std::optional<std::string>, StorageError> find(
+      std::span<const std::byte> data, std::string_view key);
 
   /**
    *@brief Append the key and value to the block in disk format.
@@ -48,8 +49,8 @@ public:
   /**
    * @brief Search this block for a key.
    */
-  std::expected<std::optional<std::string>, StorageError>
-  find(std::string_view key) const {
+  std::expected<std::optional<std::string>, StorageError> find(
+      std::string_view key) const {
     return find(data(), key);
   }
 
@@ -76,9 +77,9 @@ public:
     return first_key_;
   }
 
-private:
+ private:
   std::vector<std::byte> data_;
   std::optional<std::string> first_key_;
 };
 
-} // namespace lsm
+}  // namespace lsm

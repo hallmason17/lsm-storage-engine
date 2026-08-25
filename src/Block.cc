@@ -1,8 +1,10 @@
 #include "Block.h"
-#include "Constants.h"
-#include "utils/CheckSum.h"
+
 #include <cstdint>
 #include <cstring>
+
+#include "Constants.h"
+#include "utils/CheckSum.h"
 namespace lsm {
 
 size_t Block::encoded_size(std::string_view key, std::string_view value) {
@@ -19,8 +21,8 @@ size_t Block::append(const std::string_view key, const std::string_view value) {
   auto keylen = static_cast<uint32_t>(key.size());
   auto valuelen = static_cast<uint32_t>(value.size());
 
-  auto append_bytes = [&write_buffer](const void *d, size_t len) {
-    auto data = reinterpret_cast<const std::byte *>(d);
+  auto append_bytes = [&write_buffer](const void* d, size_t len) {
+    auto data = reinterpret_cast<const std::byte*>(d);
     write_buffer.insert(write_buffer.end(), data, data + len);
   };
 
@@ -29,7 +31,7 @@ size_t Block::append(const std::string_view key, const std::string_view value) {
   append_bytes(key.data(), key.size());
   append_bytes(value.data(), value.size());
 
-  auto cs = hash32({reinterpret_cast<const char *>(write_buffer.data()),
+  auto cs = hash32({reinterpret_cast<const char*>(write_buffer.data()),
                     write_buffer.size()});
 
   append_bytes(&cs, sizeof(cs));
@@ -42,7 +44,7 @@ size_t Block::append(const std::string_view key, const std::string_view value) {
 }
 
 std::expected<std::optional<std::pair<std::string, std::string>>, StorageError>
-Block::decode_entry(std::span<const std::byte> data, size_t &offset) {
+Block::decode_entry(std::span<const std::byte> data, size_t& offset) {
   if (offset >= data.size()) {
     return std::nullopt;
   }
@@ -77,11 +79,10 @@ Block::decode_entry(std::span<const std::byte> data, size_t &offset) {
   uint32_t file_checksum{0};
   ::memcpy(key.data(), data.data() + offset + kLenBytes, keylen);
   ::memcpy(value.data(), data.data() + offset + kLenBytes + keylen, valuelen);
-  ::memcpy(&file_checksum,
-           data.data() + offset + kLenBytes + keylen + valuelen,
+  ::memcpy(&file_checksum, data.data() + offset + kLenBytes + keylen + valuelen,
            sizeof(file_checksum));
 
-  auto checksum = hash32({reinterpret_cast<const char *>(data.data() + offset),
+  auto checksum = hash32({reinterpret_cast<const char*>(data.data() + offset),
                           kLenBytes + keylen + valuelen});
   if (file_checksum != checksum) {
     return std::unexpected(StorageError{
@@ -95,8 +96,8 @@ Block::decode_entry(std::span<const std::byte> data, size_t &offset) {
   return {{{std::move(key), std::move(value)}}};
 }
 
-std::expected<std::optional<std::string>, StorageError>
-Block::find(std::span<const std::byte> data, std::string_view key) {
+std::expected<std::optional<std::string>, StorageError> Block::find(
+    std::span<const std::byte> data, std::string_view key) {
   size_t offset = 0;
   while (offset < data.size()) {
     auto entry = decode_entry(data, offset);
@@ -106,7 +107,7 @@ Block::find(std::span<const std::byte> data, std::string_view key) {
     if (!entry->has_value()) {
       break;
     }
-    const auto &entry_key = entry->value().first;
+    const auto& entry_key = entry->value().first;
     if (entry_key == key) {
       return entry->value().second;
     }
@@ -117,4 +118,4 @@ Block::find(std::span<const std::byte> data, std::string_view key) {
   return std::nullopt;
 }
 
-} // namespace lsm
+}  // namespace lsm

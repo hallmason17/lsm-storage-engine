@@ -1,8 +1,9 @@
 #pragma once
-#include "StorageError.h"
 #include <expected>
 #include <filesystem>
 #include <string_view>
+
+#include "StorageError.h"
 namespace lsm {
 
 /**
@@ -13,17 +14,17 @@ namespace lsm {
  * memtable will load everything in this log.
  */
 class Wal {
-public:
+ public:
   explicit Wal(std::filesystem::path filename);
   ~Wal();
 
   /// Managing file handles, so no copies.
-  Wal(const Wal &) = delete;
-  Wal &operator=(const Wal &) = delete;
+  Wal(const Wal&) = delete;
+  Wal& operator=(const Wal&) = delete;
 
   /// Moving resources OK.
-  Wal(Wal &&other) noexcept;
-  Wal &operator=(Wal &&other) noexcept;
+  Wal(Wal&& other) noexcept;
+  Wal& operator=(Wal&& other) noexcept;
 
   /**
    * @brief Write a message to the log and sync to disk.
@@ -37,7 +38,7 @@ public:
    * @brief Get the path to the WAL.
    * @return The path where the log is located
    */
-  const std::filesystem::path &path() const { return path_; }
+  const std::filesystem::path& path() const { return path_; }
 
   /**
    * @brief Truncate the WAL to zero bytes.
@@ -51,7 +52,7 @@ public:
    */
   std::expected<void, StorageError> sync() const;
 
-private:
+ private:
   std::filesystem::path path_;
   int fd_{-1};
 
@@ -66,4 +67,4 @@ private:
    */
   void close_file();
 };
-} // namespace lsm
+}  // namespace lsm
