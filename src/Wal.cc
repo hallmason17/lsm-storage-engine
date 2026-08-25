@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-namespace lsm_storage_engine {
+namespace lsm {
 
 Wal::Wal(std::filesystem::path filename) : path_{std::move(filename)} {
   if (!open_file()) {
@@ -89,4 +89,4 @@ std::expected<void, StorageError> Wal::clear() const {
   return {};
 }
 
-} // namespace lsm_storage_engine
+} // namespace lsm

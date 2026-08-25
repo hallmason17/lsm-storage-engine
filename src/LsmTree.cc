@@ -14,7 +14,7 @@
 #include <shared_mutex>
 #include <stdexcept>
 #include <unistd.h>
-namespace lsm_storage_engine {
+namespace lsm {
 std::optional<std::string> LsmTree::get(const std::string_view key) {
   auto start = std::chrono::high_resolution_clock::now();
 
@@ -250,7 +250,7 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
       if (!write_res) {
         return std::unexpected{write_res.error()};
       }
-      if (entry_count % lsm_constants::kIndexSpace == 0) {
+      if (entry_count % constants::kIndexSpace == 0) {
         sst->index().emplace_back(std::string{key}, bytes_written);
       }
       bytes_written += write_res.value();
@@ -293,4 +293,4 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
 
 // TODO
 void LsmTree::rm(const std::string &) {}
-} // namespace lsm_storage_engine
+} // namespace lsm

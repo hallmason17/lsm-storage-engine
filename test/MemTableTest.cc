@@ -6,7 +6,7 @@
 #include <fstream>
 #include <gtest/gtest.h>
 
-using namespace lsm_storage_engine;
+using namespace lsm;
 
 class MemTableFlushTest : public ::testing::Test {
 protected:
@@ -94,7 +94,7 @@ TEST(MemTableTest, ShouldFlushReturnsFalseWhenBelowThreshold) {
 
 TEST(MemTableTest, ShouldFlushReturnsTrueWhenAboveThreshold) {
   MemTable table;
-  std::string large_value(lsm_constants::kMemTableFlushThreshold + 4, 'x');
+  std::string large_value(constants::kMemTableFlushThreshold + 4, 'x');
   table.put("key", large_value);
   EXPECT_TRUE(table.should_flush());
 }
@@ -122,7 +122,7 @@ TEST(MemTableTest, ClearResetsSize) {
 
 TEST(MemTableTest, ClearResetsShouldFlush) {
   MemTable table;
-  std::string large_value(lsm_constants::kMemTableFlushThreshold + 1, 'x');
+  std::string large_value(lsm::constants::kMemTableFlushThreshold + 1, 'x');
   table.put("key", large_value);
   EXPECT_TRUE(table.should_flush());
 

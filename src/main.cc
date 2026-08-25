@@ -1,6 +1,7 @@
 #include "LsmTree.h"
+#include <print>
 int main() {
-  using namespace lsm_storage_engine;
+  using namespace lsm;
   {
     LsmTree lsm;
     lsm.put("foo", "bar");

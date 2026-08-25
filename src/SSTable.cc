@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <utility>
 #include <vector>
-namespace lsm_storage_engine {
+namespace lsm {
 
 SSTable::SSTable(SSTable &&other) noexcept
     : path_{std::move(other.path_)}, fd_{std::exchange(other.fd_, -1)},
@@ -82,7 +82,7 @@ SSTable::get(std::string_view key) {
   }
 
   file_pos_ = static_cast<off_t>(jump_to);
-  for (size_t i = 0; i < lsm_constants::kIndexSpace; ++i) {
+  for (size_t i = 0; i < constants::kIndexSpace; ++i) {
     auto entry = next();
     if (!entry)
       return std::unexpected{entry.error()};
@@ -348,7 +348,7 @@ std::expected<SSTable::Footer, StorageError> SSTable::read_footer() {
         ::memcpy(&magic_num, mapped_data_.data() + offset + 3 * sizeof(size_t),
                  sizeof(magic_num));
 
-        if (magic_num != lsm_constants::kMagicNumber) {
+        if (magic_num != constants::kMagicNumber) {
           return std::unexpected{StorageError{
               .kind = StorageError::Kind::FileRead,
               .message = "Invalid magic number in footer",
@@ -480,4 +480,4 @@ std::expected<BloomFilter, StorageError> SSTable::read_bloom_filter() {
 
   return bloom_filter_;
 }
-} // namespace lsm_storage_engine
+} // namespace lsm

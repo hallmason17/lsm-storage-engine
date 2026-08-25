@@ -8,7 +8,7 @@
 #include <optional>
 #include <span>
 #include <vector>
-namespace lsm_storage_engine {
+namespace lsm {
 
 /**
  * @brief Immutable on-disk sorted string table.
@@ -116,11 +116,10 @@ public:
     size_t magic_num;
     Footer()
         : index_offset(0), index_size(0), num_index_entries(0),
-          magic_num(lsm_constants::kMagicNumber) {}
+          magic_num(constants::kMagicNumber) {}
     Footer(size_t offset, size_t size, size_t num_entries)
         : index_offset(offset), index_size(size),
-          num_index_entries(num_entries),
-          magic_num(lsm_constants::kMagicNumber) {}
+          num_index_entries(num_entries), magic_num(constants::kMagicNumber) {}
   };
 
   struct IndexEntry {
@@ -181,4 +180,4 @@ private:
    */
   void close_file();
 };
-} // namespace lsm_storage_engine
+} // namespace lsm

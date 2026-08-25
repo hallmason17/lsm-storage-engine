@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
-namespace lsm_storage_engine {
+namespace lsm {
 
 class Block {
 public:
@@ -35,7 +35,7 @@ public:
 
   [[nodiscard]]
   bool is_full() const {
-    return data_.size() >= lsm_constants::kBlockSize;
+    return data_.size() >= constants::kBlockSize;
   }
 
   [[nodiscard]]
@@ -48,4 +48,4 @@ private:
   std::optional<std::string> first_key_;
 };
 
-} // namespace lsm_storage_engine
+} // namespace lsm

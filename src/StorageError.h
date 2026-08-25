@@ -1,7 +1,7 @@
 #pragma once
 #include <filesystem>
 #include <string>
-namespace lsm_storage_engine {
+namespace lsm {
 struct StorageError {
   enum class Kind { FileOpen, FileWrite, FileRead, Corruption };
   Kind kind;
@@ -20,4 +20,4 @@ struct StorageError {
     return {Kind::FileRead, "Failed to read file", path};
   }
 };
-} // namespace lsm_storage_engine
+} // namespace lsm

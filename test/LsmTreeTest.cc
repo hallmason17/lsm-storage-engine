@@ -4,7 +4,7 @@
 #include <fstream>
 #include <gtest/gtest.h>
 
-using namespace lsm_storage_engine;
+using namespace lsm;
 
 class LsmTreeTest : public ::testing::Test {
 protected:
@@ -94,7 +94,7 @@ TEST_F(LsmTreeTest, MemTableTakesPrecedenceOverSSTable) {
   LsmTree lsm;
 
   // Put enough data to trigger a flush
-  std::string large_value(lsm_constants::kMemTableFlushThreshold, 'x');
+  std::string large_value(constants::kMemTableFlushThreshold, 'x');
   lsm.put("key1", large_value);
 
   // This should trigger flush, and then add new data to memtable
@@ -110,7 +110,7 @@ TEST_F(LsmTreeTest, MultipleFlushesMaintainData) {
   LsmTree lsm;
 
   // Trigger multiple flushes
-  std::string large_value(lsm_constants::kMemTableFlushThreshold, 'x');
+  std::string large_value(constants::kMemTableFlushThreshold, 'x');
 
   lsm.put("batch1_key", "batch1_value");
   lsm.put("trigger1", large_value); // Triggers first flush
@@ -129,7 +129,7 @@ TEST_F(LsmTreeTest, MultipleFlushesMaintainData) {
 TEST_F(LsmTreeTest, NewerSSTableTakesPrecedence) {
   LsmTree lsm;
 
-  std::string large_value(lsm_constants::kMemTableFlushThreshold, 'x');
+  std::string large_value(constants::kMemTableFlushThreshold, 'x');
 
   // Put key with value1, then trigger flush
   lsm.put("shared_key", "value1");
@@ -148,7 +148,7 @@ TEST_F(LsmTreeTest, NewerSSTableTakesPrecedence) {
 TEST_F(LsmTreeTest, GetMissingKeyAfterFlush) {
   LsmTree lsm;
 
-  std::string large_value(lsm_constants::kMemTableFlushThreshold, 'x');
+  std::string large_value(constants::kMemTableFlushThreshold, 'x');
   lsm.put("exists", large_value); // Triggers flush
 
   // Key that was never inserted should return nullopt
@@ -161,7 +161,7 @@ TEST_F(LsmTreeTest, GetMissingKeyAfterFlush) {
 TEST_F(LsmTreeTest, CompactionTriggersAfterFourSSTables) {
   LsmTree lsm;
 
-  std::string large_value(lsm_constants::kMemTableFlushThreshold, 'x');
+  std::string large_value(constants::kMemTableFlushThreshold, 'x');
 
   // Create 4 SSTables to trigger compaction
   lsm.put("key1", "value1");
@@ -186,7 +186,7 @@ TEST_F(LsmTreeTest, CompactionTriggersAfterFourSSTables) {
 TEST_F(LsmTreeTest, CompactionPreservesAllKeys) {
   LsmTree lsm;
 
-  std::string large_value(lsm_constants::kMemTableFlushThreshold, 'x');
+  std::string large_value(constants::kMemTableFlushThreshold, 'x');
 
   // Insert unique keys across multiple SSTables
   for (int batch = 0; batch < 4; ++batch) {
@@ -217,7 +217,7 @@ TEST_F(LsmTreeTest, CompactionPreservesAllKeys) {
 TEST_F(LsmTreeTest, CompactionKeepsNewerValueOnKeyCollision) {
   LsmTree lsm;
 
-  std::string large_value(lsm_constants::kMemTableFlushThreshold, 'x');
+  std::string large_value(constants::kMemTableFlushThreshold, 'x');
 
   // Write same key with different values across SSTables
   lsm.put("shared_key", "oldest_value");
@@ -241,7 +241,7 @@ TEST_F(LsmTreeTest, CompactionKeepsNewerValueOnKeyCollision) {
 TEST_F(LsmTreeTest, CompactionHandlesMixedNewAndOldKeys) {
   LsmTree lsm;
 
-  std::string large_value(lsm_constants::kMemTableFlushThreshold, 'x');
+  std::string large_value(constants::kMemTableFlushThreshold, 'x');
 
   // SSTable 1: keys a, b, c
   lsm.put("a", "a_v1");
@@ -279,7 +279,7 @@ TEST_F(LsmTreeTest, CompactionHandlesMixedNewAndOldKeys) {
 TEST_F(LsmTreeTest, CompactionReducesSSTableCount) {
   LsmTree lsm;
 
-  std::string large_value(lsm_constants::kMemTableFlushThreshold, 'x');
+  std::string large_value(constants::kMemTableFlushThreshold, 'x');
 
   // Create 4 SSTables
   for (int i = 0; i < 4; ++i) {
@@ -305,7 +305,7 @@ TEST_F(LsmTreeTest, DataSurvivesRestartAfterCompaction) {
   {
     LsmTree lsm;
 
-    std::string large_value(lsm_constants::kMemTableFlushThreshold, 'x');
+    std::string large_value(constants::kMemTableFlushThreshold, 'x');
 
     lsm.put("persistent_key1", "persistent_value1");
     lsm.put("trigger1", large_value);

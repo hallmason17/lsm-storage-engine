@@ -4,7 +4,7 @@
 #include <gtest/gtest.h>
 #include <print>
 
-using namespace lsm_storage_engine;
+using namespace lsm;
 
 class SSTableTest : public ::testing::Test {
 protected:
@@ -43,7 +43,8 @@ protected:
 TEST_F(SSTableTest, ReadEntryMMap) {
   write_test_data({{"key1", "value1"}});
   auto sst = SSTable::open(test_path_);
-  ASSERT_TRUE(sst.has_value()) << sst.error().message + sst.error().path.string();
+  ASSERT_TRUE(sst.has_value())
+      << sst.error().message + sst.error().path.string();
 
   // Use next() which handles positioning after the header
   auto result = sst->next();

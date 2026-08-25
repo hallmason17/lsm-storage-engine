@@ -5,12 +5,9 @@
 #include <cassert>
 #include <expected>
 #include <filesystem>
-#include <fstream>
-#include <ios>
-#include <sstream>
 #include <sys/fcntl.h>
 #include <unistd.h>
-namespace lsm_storage_engine {
+namespace lsm {
 
 std::optional<std::string> MemTable::get(const std::string_view key) const {
   auto it = map_.find(std::string(key));
@@ -160,4 +157,4 @@ MemTable::restore_from_wal(const std::filesystem::path &wal_path) {
   ::close(fd);
   return {};
 }
-} // namespace lsm_storage_engine
+} // namespace lsm

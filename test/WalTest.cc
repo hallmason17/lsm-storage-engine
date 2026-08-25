@@ -1,9 +1,7 @@
 #include "Wal.h"
-#include <fstream>
 #include <gtest/gtest.h>
-#include <sstream>
 
-using namespace lsm_storage_engine;
+using namespace lsm;
 
 class WalTest : public ::testing::Test {
 protected:

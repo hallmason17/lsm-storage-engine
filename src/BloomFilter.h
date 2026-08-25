@@ -2,7 +2,7 @@
 #include <cmath>
 #include <string_view>
 #include <vector>
-namespace lsm_storage_engine {
+namespace lsm {
 class BloomFilter {
 public:
   BloomFilter() {}
@@ -24,4 +24,4 @@ private:
 
   std::vector<size_t> get_hashes(const std::string_view data) const;
 };
-} // namespace lsm_storage_engine
+} // namespace lsm

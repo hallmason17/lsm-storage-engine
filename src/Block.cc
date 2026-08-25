@@ -1,7 +1,7 @@
 #include "Block.h"
 #include "utils/CheckSum.h"
 #include <cstdint>
-namespace lsm_storage_engine {
+namespace lsm {
 size_t Block::append(const std::string_view key, const std::string_view value) {
   std::vector<std::byte> write_buffer;
   auto keylen = static_cast<uint32_t>(key.size());
@@ -32,4 +32,4 @@ size_t Block::append(const std::string_view key, const std::string_view value) {
   return size;
 }
 
-} // namespace lsm_storage_engine
+} // namespace lsm

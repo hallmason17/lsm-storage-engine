@@ -10,7 +10,7 @@
 #include <stdexcept>
 #include <string_view>
 #include <vector>
-namespace lsm_storage_engine {
+namespace lsm {
 
 /**
  * @brief Core LSM-tree storage engine.
@@ -123,4 +123,4 @@ private:
   std::atomic<long long> max_put_time_us_{0};
   std::atomic<long long> max_get_time_us_{0};
 };
-} // namespace lsm_storage_engine
+} // namespace lsm

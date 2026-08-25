@@ -3,7 +3,7 @@
 #include <expected>
 #include <filesystem>
 #include <string_view>
-namespace lsm_storage_engine {
+namespace lsm {
 
 /**
  * @brief Implementation for the Write-Ahead Log.
@@ -66,4 +66,4 @@ private:
    */
   void close_file();
 };
-} // namespace lsm_storage_engine
+} // namespace lsm

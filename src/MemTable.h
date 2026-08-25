@@ -6,7 +6,7 @@
 #include <filesystem>
 #include <map>
 #include <optional>
-namespace lsm_storage_engine {
+namespace lsm {
 
 /**
  * @brief In-memory sorted key-value store for the LSM-tree.
@@ -22,8 +22,7 @@ namespace lsm_storage_engine {
  */
 class MemTable {
 public:
-  MemTable()
-      : size_(0), flush_threshold_(lsm_constants::kMemTableFlushThreshold) {}
+  MemTable() : size_(0), flush_threshold_(constants::kMemTableFlushThreshold) {}
 
   /**
    * @brief Retrieves the value associated with the given key.
@@ -78,4 +77,4 @@ private:
   size_t size_;
   size_t flush_threshold_;
 };
-} // namespace lsm_storage_engine
+} // namespace lsm
