@@ -79,16 +79,26 @@ std::expected<std::optional<std::string>, StorageError> SSTable::get(
   if (index_.empty()) {
     return std::nullopt;
   }
+
+  // Reminder: index entries are {key : file_position} pairs.
+  // Find the first entry in the index who's key >= key we're searching for.
   auto it = std::ranges::upper_bound(index_, key, std::ranges::less{},
                                      &IndexEntry::key);
+
+  // If we're at the beginning, nothing was >= key, return.
   if (it == index_.begin()) {
     return std::nullopt;
   }
+
+  // `it` is one past where we need to search. Go back one and search in that
+  // block.
   --it;
   const size_t start = it->file_position;
   const size_t end = std::next(it) != index_.end()
                          ? std::next(it)->file_position
                          : footer().index_offset;
+
+  // End - start is the size of the block, find it from the index.
   if (end < start) {
     return std::unexpected(StorageError{
         .kind = StorageError::Kind::Corruption,
