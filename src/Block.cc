@@ -39,7 +39,9 @@ size_t Block::append(const std::string_view key, const std::string_view value) {
   if (!first_key_) {
     first_key_ = std::string{key};
   }
-  data_.append_range(write_buffer);
+
+  data_.insert(data_.end(), write_buffer.begin(), write_buffer.end());
+
   return rec_size;
 }
 
