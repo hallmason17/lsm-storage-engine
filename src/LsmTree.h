@@ -31,7 +31,7 @@ class LsmTree {
     // Restore the memtable from WAL on startup.
     auto result = mem_table_.restore_from_wal(wal_.path());
     if (!result) {
-      std::println("{}", result.error().message);
+      std::println(stderr, "{}", result.error().message);
       throw std::runtime_error("Could not restore state from WAL!");
     }
     if (!load_ssts()) {
@@ -60,8 +60,9 @@ class LsmTree {
    * @brief Insert or update a key-value pair
    * @param key Key to insert/update
    * @param value Value to store
+   * @param sync If true, fdatasync the WAL before returning
    */
-  void put(const std::string& key, const std::string& value);
+  void put(const std::string& key, const std::string& value, bool sync = false);
 
   /**
    * @brief Remove a key-value pair

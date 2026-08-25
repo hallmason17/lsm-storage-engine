@@ -13,7 +13,6 @@
 #include <shared_mutex>
 #include <stdexcept>
 
-#include "Constants.h"
 #include "MemTable.h"
 #include "SSTable.h"
 #include "StorageError.h"
@@ -58,6 +57,9 @@ std::optional<std::string> LsmTree::get(const std::string_view key) {
 }
 
 std::expected<void, StorageError> LsmTree::flush_memtable() {
+  if (auto res = wal_.sync(); !res) {
+    return res;
+  }
   auto result =
       SSTable::create()
           .and_then([&](SSTable sst) {
@@ -79,13 +81,13 @@ std::expected<void, StorageError> LsmTree::flush_memtable() {
           });
   return result;
 }
-void LsmTree::put(const std::string& key, const std::string& value) {
+void LsmTree::put(const std::string& key, const std::string& value, bool sync) {
   auto start = std::chrono::high_resolution_clock::now();
 
   {
     // Lock to ensure these two operations are atomic.
     std::unique_lock lock(rwlock_);
-    if (!wal_.write(key, value)) {
+    if (!wal_.write(key, value, sync)) {
       throw std::runtime_error("Failed to write to WAL!");
     }
     mem_table_.put(key, value);

@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "Constants.h"
 #include "StorageError.h"
 #include "utils/CheckSum.h"
 
@@ -24,13 +25,16 @@ Wal::Wal(std::filesystem::path filename) : path_{std::move(filename)} {
 Wal::~Wal() { close_file(); }
 
 Wal::Wal(Wal&& other) noexcept
-    : path_{std::move(other.path_)}, fd_{std::exchange(other.fd_, -1)} {}
+    : path_{std::move(other.path_)},
+      fd_{std::exchange(other.fd_, -1)},
+      unsynced_{std::exchange(other.unsynced_, 0)} {}
 
 Wal& Wal::operator=(Wal&& other) noexcept {
   if (this != &other) {
     close_file();
     path_ = std::move(other.path_);
     fd_ = std::exchange(other.fd_, -1);
+    unsynced_ = std::exchange(other.unsynced_, 0);
   }
   return *this;
 }
@@ -51,7 +55,8 @@ void Wal::close_file() {
 }
 
 std::expected<void, StorageError> Wal::write(std::string_view key,
-                                             std::string_view value) const {
+                                             std::string_view value,
+                                             bool sync) const {
   std::vector<std::byte> write_buffer;
   auto keylen = static_cast<uint32_t>(key.size());
   auto valuelen = static_cast<uint32_t>(value.size());
@@ -75,13 +80,21 @@ std::expected<void, StorageError> Wal::write(std::string_view key,
       static_cast<ssize_t>(write_buffer.size())) {
     return std::unexpected(StorageError::file_write(path()));
   }
+  unsynced_ += write_buffer.size();
+  if (sync || unsynced_ >= constants::kWalSyncThreshold) {
+    return this->sync();
+  }
   return {};
 }
 
 std::expected<void, StorageError> Wal::sync() const {
-  if (::fsync(fd_) == -1) {
+  if (unsynced_ == 0) {
+    return {};
+  }
+  if (::fdatasync(fd_) == -1) {
     return std::unexpected{StorageError::file_write(path())};
   }
+  unsynced_ = 0;
   return {};
 }
 
@@ -89,6 +102,7 @@ std::expected<void, StorageError> Wal::clear() const {
   if (::ftruncate(fd_, 0) == -1) {
     return std::unexpected{StorageError::file_write(path())};
   }
+  unsynced_ = 0;
   return {};
 }
 
