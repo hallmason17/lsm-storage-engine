@@ -3,6 +3,7 @@
 #include "StorageError.h"
 #include "utils/CheckSum.h"
 #include <algorithm>
+#include <iterator>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -70,30 +71,36 @@ SSTable::get(std::string_view key) {
   if (bloom_filter_.bits().size() > 0 && !bloom_filter_.contains(key)) {
     return std::nullopt;
   }
-  // Calculate the correct position after header and bloom filter
-  size_t bloom_filter_size =
-      sizeof(size_t) + bloom_filter_.bits().size() * sizeof(bool);
-  size_t jump_to{header().size + bloom_filter_size};
+  if (index_.empty()) {
+    return std::nullopt;
+  }
   auto it = std::ranges::upper_bound(index_, key, std::ranges::less{},
                                      &IndexEntry::key);
-  if (it != index_.begin()) {
-    --it;
-    jump_to = it->file_position;
+  if (it == index_.begin()) {
+    return std::nullopt;
   }
-
-  file_pos_ = static_cast<off_t>(jump_to);
-  for (size_t i = 0; i < constants::kIndexSpace; ++i) {
-    auto entry = next();
-    if (!entry)
-      return std::unexpected{entry.error()};
-    if (!entry->has_value())
-      return std::nullopt;
-
-    if (entry->value().first == key) {
-      return entry->value().second;
-    }
+  --it;
+  const size_t start = it->file_position;
+  const size_t end = std::next(it) != index_.end() ? std::next(it)->file_position
+                                                   : footer().index_offset;
+  if (end < start) {
+    return std::unexpected(StorageError{
+        .kind = StorageError::Kind::Corruption,
+        .message = "Invalid block bounds",
+        .path = path(),
+    });
   }
-  return std::nullopt;
+  if (auto res = ensure_mapped(); !res) {
+    return std::unexpected(res.error());
+  }
+  if (end > mapped_data_.size()) {
+    return std::unexpected(StorageError{
+        .kind = StorageError::Kind::Corruption,
+        .message = "Block extends past file",
+        .path = path(),
+    });
+  }
+  return Block::find(mapped_data_.subspan(start, end - start), key);
 }
 std::expected<SSTable, StorageError> SSTable::create() {
   SSTable sst;
@@ -218,7 +225,7 @@ SSTable::next() {
   return {{{std::move(k), std::move(v)}}};
 }
 
-std::expected<size_t, StorageError> SSTable::write_block(Block &block) {
+std::expected<size_t, StorageError> SSTable::write_block(const Block &block) {
   // Just write the block's data directly. It's already in the disk format.
   if (::write(fd_, block.data().data(), block.size()) !=
       static_cast<ssize_t>(block.size())) {

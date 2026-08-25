@@ -85,10 +85,10 @@ public:
   std::expected<std::optional<std::pair<std::string, std::string>>,
                 StorageError>
   read_entry() const;
-  std::expected<size_t, StorageError>
-  write_entry(const std::string_view key, const std::string_view value) const;
 
-  std::expected<size_t, StorageError> write_block(Block &);
+  std::expected<size_t, StorageError> write_block(const Block &);
+
+  void rewind() { file_pos_ = 0; }
 
   bool marked_for_delete_{false};
 

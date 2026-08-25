@@ -208,6 +208,9 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
     size_t bytes_written{sst->header().size};
 
     // First pass: collect all keys for the bloom filter and count entries
+    left_table.rewind();
+    right_table.rewind();
+
     std::vector<std::pair<std::string, std::string>> all_entries;
     auto lhs = left_table.next();
     auto rhs = right_table.next();
@@ -243,18 +246,31 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
     }
     bytes_written += bf_res.value();
 
-    // Second pass: write all entries
-    size_t entry_count{0};
+    // Second pass: write all entries as blocks
+    Block block;
     for (const auto &[key, val] : all_entries) {
-      auto write_res = sst->write_entry(key, val);
+      if (block.append(key, val) == 0) {
+        sst->index().emplace_back(std::string(block.first().value()),
+                                  bytes_written);
+        auto write_res = sst->write_block(block);
+        if (!write_res) {
+          return std::unexpected{write_res.error()};
+        }
+        bytes_written += write_res.value();
+        block = Block{};
+        if (block.append(key, val) == 0) {
+          return std::unexpected(StorageError::file_write(sst->path()));
+        }
+      }
+    }
+    if (block.size() > 0) {
+      sst->index().emplace_back(std::string(block.first().value()),
+                                bytes_written);
+      auto write_res = sst->write_block(block);
       if (!write_res) {
         return std::unexpected{write_res.error()};
       }
-      if (entry_count % constants::kIndexSpace == 0) {
-        sst->index().emplace_back(std::string{key}, bytes_written);
-      }
       bytes_written += write_res.value();
-      entry_count++;
     }
     left_table.marked_for_delete_ = true;
     right_table.marked_for_delete_ = true;

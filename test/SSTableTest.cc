@@ -196,3 +196,31 @@ TEST_F(SSTableTest, ManyEntries) {
   ASSERT_TRUE(missing.has_value());
   EXPECT_FALSE(missing->has_value());
 }
+
+TEST_F(SSTableTest, GetAcrossMultipleBlocks) {
+  std::vector<std::pair<std::string, std::string>> entries;
+  for (int i = 0; i < 400; ++i) {
+    entries.emplace_back("key" + std::to_string(i),
+                         "value" + std::to_string(i));
+  }
+  write_test_data(entries);
+  SSTable sst = SSTable::open(test_path_).value();
+
+  EXPECT_GT(sst.index().size(), 1U);
+
+  auto first = sst.get("key0");
+  ASSERT_TRUE(first.has_value() && first->has_value());
+  EXPECT_EQ(**first, "value0");
+
+  auto mid = sst.get("key200");
+  ASSERT_TRUE(mid.has_value() && mid->has_value());
+  EXPECT_EQ(**mid, "value200");
+
+  auto last = sst.get("key399");
+  ASSERT_TRUE(last.has_value() && last->has_value());
+  EXPECT_EQ(**last, "value399");
+
+  auto missing = sst.get("key400");
+  ASSERT_TRUE(missing.has_value());
+  EXPECT_FALSE(missing->has_value());
+}

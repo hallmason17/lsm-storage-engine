@@ -28,6 +28,7 @@ add_library(lsm
   src/Wal.cc
   src/SSTable.cc
   src/BloomFilter.cc
+  src/Block.cc
 )
 
 target_include_directories(lsm PUBLIC src)

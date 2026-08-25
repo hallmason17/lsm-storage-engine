@@ -59,15 +59,25 @@ std::expected<void, StorageError> MemTable::flush_to_sst(SSTable &sst) {
   bytes_written += bf_res.value();
 
   // Write to block first. Once block full, write block to sst and add to index.
+  Block block;
   for (const auto &[key, val] : map_) {
-    Block block;
-    while (!block.is_full()) {
-      block.append(key, val);
+    if (block.append(key, val) == 0) {
+      // Index entry at the beginning of each block with the block's first key.
+      sst.index().emplace_back(std::string(block.first().value()),
+                               bytes_written);
+      auto res = sst.write_block(block);
+      if (!res) {
+        return std::unexpected(res.error());
+      }
+      bytes_written += res.value();
+      block = Block{};
+      if (block.append(key, val) == 0) {
+        return std::unexpected(StorageError::file_write(sst.path()));
+      }
     }
-
-    // Index entry at the beginning of each block with the block's first key.
+  }
+  if (block.size() > 0) {
     sst.index().emplace_back(std::string(block.first().value()), bytes_written);
-
     auto res = sst.write_block(block);
     if (!res) {
       return std::unexpected(res.error());
