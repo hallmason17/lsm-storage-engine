@@ -202,7 +202,7 @@ SSTable::read_entry() const {
                val.size(),
            sizeof(file_checksum));
 
-  auto datalen =
+  uint32_t datalen =
       static_cast<uint32_t>(2 * sizeof(uint32_t) + keylen + valuelen);
   auto checksum =
       hash32({reinterpret_cast<const char*>(mapped_data_.data() + file_pos_),

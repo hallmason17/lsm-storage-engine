@@ -26,7 +26,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Debug
 ```
 
 ## TODOs
-- [ ] Block-based SSTable format
+- [x] Block-based SSTable format
 - [x] Bloom filters
 - [ ] Leveled compaction
 - [ ] Range scans

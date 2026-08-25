@@ -84,6 +84,19 @@ std::expected<void, StorageError> Wal::write(std::string_view key,
   if (sync || unsynced_ >= constants::kWalSyncThreshold) {
     return this->sync();
   }
+
+  assert(fd_ > -1);
+
+  size_t remaining = write_buffer.size();
+  ssize_t written = 0;
+  while (remaining > 0) {
+    written = ::write(fd_, write_buffer.data() + written, remaining);
+    if (written == -1) {
+      return std::unexpected{StorageError::file_write(path())};
+    }
+    remaining -= static_cast<size_t>(written);
+  }
+
   return {};
 }
 

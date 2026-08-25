@@ -34,6 +34,7 @@ add_library(lsm
 target_include_directories(lsm PUBLIC src)
 
 target_link_libraries(lsm PRIVATE xxHash::xxhash)
+find_package(ZLIB REQUIRED)
 
 # Warnings and errors
 target_compile_options(lsm PRIVATE
