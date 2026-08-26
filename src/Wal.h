@@ -1,7 +1,10 @@
 #pragma once
+#include <atomic>
 #include <expected>
 #include <filesystem>
+#include <stop_token>
 #include <string_view>
+#include <thread>
 
 #include "StorageError.h"
 namespace lsm {
@@ -52,12 +55,13 @@ class Wal {
    * @brief fdatasync pending WAL bytes to disk.
    * @return void on success, StorageError on failure.
    */
-  std::expected<void, StorageError> sync() const;
+  std::expected<void, StorageError> fsync() const;
 
  private:
   std::filesystem::path path_;
   int fd_{-1};
-  mutable size_t unsynced_{0};
+  mutable std::atomic<size_t> unsynced_{0};
+  std::jthread fsync_thread;
 
   /**
    * @brief Opens the WAL file for writing.
@@ -69,5 +73,10 @@ class Wal {
    * @brief Closes the file descriptor if open.
    */
   void close_file();
+
+  /**
+   * @brief Function for the fsync thread.
+   */
+  void fsync_worker(std::stop_token);
 };
 }  // namespace lsm

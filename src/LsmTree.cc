@@ -57,7 +57,7 @@ std::optional<std::string> LsmTree::get(const std::string_view key) {
 }
 
 std::expected<void, StorageError> LsmTree::flush_memtable() {
-  if (auto res = wal_.sync(); !res) {
+  if (auto res = wal_.fsync(); !res) {
     return res;
   }
   auto result =
