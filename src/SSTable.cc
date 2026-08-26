@@ -475,6 +475,9 @@ std::expected<size_t, StorageError> SSTable::write_bloom_filter(
 }
 
 std::expected<BloomFilter, StorageError> SSTable::read_bloom_filter() {
+  if (!bloom_filter_.bits().empty()) {
+    return bloom_filter_;
+  }
   // After header
   file_pos_ = static_cast<off_t>(header_.size);
   size_t bf_size{0};

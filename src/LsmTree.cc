@@ -9,10 +9,12 @@
 #include <fstream>
 #include <mutex>
 #include <optional>
+#include <queue>
 #include <ranges>
 #include <shared_mutex>
 #include <stdexcept>
 
+#include "BloomFilter.h"
 #include "MemTable.h"
 #include "SSTable.h"
 #include "StorageError.h"
@@ -185,6 +187,163 @@ static void cleanup_sst_files(std::vector<SSTable>& ss_tables) {
 }
 
 std::expected<void, StorageError> LsmTree::maybe_compact() {
+  if (ss_tables_.size() < 4) {
+    return {};
+  }
+  std::vector<SSTable> new_ssts;
+  auto new_sst = SSTable::create();
+  if (!new_sst) {
+    return std::unexpected(new_sst.error());
+  }
+
+  // BloomFilter(n) allocates n * 10 bits — recover entry counts from that.
+  size_t num_entries{0};
+  std::string min_key, max_key;
+  for (auto& sst : ss_tables_) {
+    auto bloom = sst.read_bloom_filter();
+    if (!bloom) {
+      return std::unexpected(bloom.error());
+    }
+    num_entries += bloom.value().bits().size() / 10;
+
+    if (min_key.empty() || sst.header().min_key < min_key) {
+      min_key = sst.header().min_key;
+    }
+    if (max_key.empty() || sst.header().max_key > max_key) {
+      max_key = sst.header().max_key;
+    }
+  }
+
+  // First pass: populate bloom
+  BloomFilter new_bloom{num_entries};
+  for (auto& sst : ss_tables_) {
+    sst.rewind();
+    while (true) {
+      auto entry = sst.next();
+      if (!entry) {
+        return std::unexpected(entry.error());
+      }
+      if (!entry->has_value()) {
+        break;
+      }
+      new_bloom.add(entry->value().first);
+    }
+  }
+
+  SSTable::Header header{min_key, max_key};
+  if (auto res = new_sst.value().write_header(std::move(header)); !res) {
+    return std::unexpected{res.error()};
+  }
+  size_t bytes_written{new_sst->header().size};
+
+  auto bf_res = new_sst->write_bloom_filter(std::move(new_bloom));
+  if (!bf_res) {
+    return std::unexpected{bf_res.error()};
+  }
+  bytes_written += bf_res.value();
+
+  // Second pass: k-way merge into blocks.
+  size_t k = ss_tables_.size();
+  struct merge_helper {
+    std::optional<std::pair<std::string, std::string>> kv;
+    SSTable* sst;
+  };
+  auto merge_comparator = [](const merge_helper& a, const merge_helper& b) {
+    return a.kv->first > b.kv->first;
+  };
+  std::priority_queue<merge_helper, std::vector<merge_helper>,
+                      decltype(merge_comparator)>
+      queue{merge_comparator};
+
+  // Load with first value from each SSTable.
+  for (size_t i = 0; i < k; ++i) {
+    ss_tables_[i].rewind();
+    auto entry = ss_tables_[i].next();
+    if (!entry) {
+      return std::unexpected(entry.error());
+    }
+    if (entry->has_value()) {
+      queue.push({std::move(entry.value()), &ss_tables_[i]});
+    }
+  }
+
+  // Block as the temporary buffer.
+  Block block;
+  while (!queue.empty()) {
+    auto top = queue.top();
+    queue.pop();
+    if (!top.kv.has_value()) {
+      continue;
+    }
+
+    if (block.append(top.kv->first, top.kv->second) == 0) {
+      // Block full, save it to the new SSTable and make a new block.
+      new_sst->index().emplace_back(std::string(block.first().value()),
+                                    bytes_written);
+      auto write_res = new_sst->write_block(block);
+      if (!write_res) {
+        return std::unexpected{write_res.error()};
+      }
+      bytes_written += write_res.value();
+      block = Block{};
+      if (block.append(top.kv->first, top.kv->second) == 0) {
+        return std::unexpected(StorageError::file_write(new_sst->path()));
+      }
+    }
+
+    // Advance the iterator for this SSTable, reinsert into the queue.
+    auto next = top.sst->next();
+    if (!next) {
+      return std::unexpected(next.error());
+    }
+    if (next->has_value()) {
+      queue.push({std::move(next.value()), top.sst});
+    }
+  }
+
+  // Write leftover to the new SSTable.
+  if (block.size() > 0) {
+    new_sst->index().emplace_back(std::string(block.first().value()),
+                                  bytes_written);
+    auto write_res = new_sst->write_block(block);
+    if (!write_res) {
+      return std::unexpected{write_res.error()};
+    }
+    bytes_written += write_res.value();
+  }
+
+  for (auto& sst : ss_tables_) {
+    sst.marked_for_delete_ = true;
+  }
+
+  SSTable::Footer footer;
+  footer.index_offset = bytes_written;
+  auto idx_res = new_sst->write_index();
+  if (!idx_res) {
+    return std::unexpected{idx_res.error()};
+  }
+  footer.index_size = idx_res.value();
+  footer.num_index_entries = new_sst->index().size();
+
+  if (auto res = new_sst.value().write_footer(footer); !res) {
+    return std::unexpected{res.error()};
+  }
+  new_ssts.push_back(std::move(new_sst.value()));
+  cleanup_sst_files(ss_tables_);
+  ss_tables_ = std::move(new_ssts);
+
+  std::filesystem::resize_file("lsm.meta", 0);
+
+  for (auto& sst : ss_tables_) {
+    auto res = update_meta(sst);
+    if (!res) {
+      return std::unexpected(res.error());
+    }
+  }
+
+  return {};
+}
+std::expected<void, StorageError> LsmTree::maybe_compact1() {
   // some random number for testing
   // TODO: come up with a real compaction trigger
   if (ss_tables_.size() < 4) {
