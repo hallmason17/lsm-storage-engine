@@ -118,7 +118,6 @@ class LsmTree {
   std::expected<void, StorageError> update_meta(SSTable& sstable);
 
   std::expected<void, StorageError> maybe_compact();
-  std::expected<void, StorageError> maybe_compact1();
 
   std::expected<void, StorageError> flush_memtable();
 
