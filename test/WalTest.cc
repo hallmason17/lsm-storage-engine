@@ -9,8 +9,6 @@ class WalTest : public ::testing::Test {
  protected:
   std::filesystem::path test_path_ = "test_wal.log";
   lsm::test::TempDir temp_dir_;
-
-  void TearDown() override { std::filesystem::remove(test_path_); }
 };
 
 TEST_F(WalTest, ConstructorCreatesFile) {
