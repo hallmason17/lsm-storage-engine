@@ -13,10 +13,17 @@ using namespace lsm;
 class MemTableFlushTest : public ::testing::Test {
  protected:
   std::filesystem::path test_path_ = "test_memtable_flush.sst";
+  std::string test_database_name_ = "test_memtable_flush";
 
   void TearDown() override {
     std::filesystem::remove(test_path_);
-    std::filesystem::remove("lsm.meta");
+    // Remove any auto-named SST files created during tests
+    for (const auto& entry :
+         std::filesystem::directory_iterator(std::filesystem::current_path())) {
+      if (entry.path().extension() == ".sst") {
+        std::filesystem::remove(entry.path());
+      }
+    }
   }
 };
 
@@ -136,7 +143,7 @@ TEST(MemTableTest, ClearResetsShouldFlush) {
 
 TEST_F(MemTableFlushTest, FlushToDiskSucceeds) {
   MemTable table;
-  auto sst = SSTable::create().value();
+  auto sst = SSTable::create(test_database_name_).value();
   table.put("key1", "value1");
 
   auto result = table.flush_to_sst(sst);
@@ -169,7 +176,7 @@ TEST_F(MemTableFlushTest, FlushToDiskReturnsErrorForInvalidPath) {
 
 TEST_F(MemTableFlushTest, FlushEmptyTableSucceeds) {
   MemTable table;
-  auto sst = SSTable::create().value();
+  auto sst = SSTable::create(test_database_name_).value();
   auto result = table.flush_to_sst(sst);
   EXPECT_TRUE(result.has_value());
 }
@@ -180,7 +187,7 @@ TEST_F(MemTableFlushTest, FlushThenReadViaSSTablSingleEntry) {
   MemTable table;
   table.put("key1", "value1");
 
-  auto sst = SSTable::create().value();
+  auto sst = SSTable::create(test_database_name_).value();
   auto flush_result = table.flush_to_sst(sst);
   ASSERT_TRUE(flush_result.has_value());
 
@@ -198,7 +205,7 @@ TEST_F(MemTableFlushTest, FlushThenReadViaSSTablMultipleEntries) {
   table.put("banana", "yellow");
   table.put("cherry", "red");
 
-  auto sst = SSTable::create().value();
+  auto sst = SSTable::create(test_database_name_).value();
   auto flush_result = table.flush_to_sst(sst);
   ASSERT_TRUE(flush_result.has_value());
 
@@ -226,7 +233,7 @@ TEST_F(MemTableFlushTest, FlushPreservesKeyOrder) {
   table.put("alpha", "a");
   table.put("middle", "m");
 
-  auto sst = SSTable::create().value();
+  auto sst = SSTable::create(test_database_name_).value();
   auto flush_result = table.flush_to_sst(sst);
   ASSERT_TRUE(flush_result.has_value());
 

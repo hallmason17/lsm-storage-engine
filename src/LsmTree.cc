@@ -63,7 +63,7 @@ std::expected<void, StorageError> LsmTree::flush_memtable() {
     return res;
   }
   auto result =
-      SSTable::create()
+      SSTable::create(database_name_.string())
           .and_then([&](SSTable sst) {
             return update_meta(sst).transform([&] { return std::move(sst); });
           })
@@ -124,8 +124,8 @@ void LsmTree::put(const std::string& key, const std::string& value, bool sync) {
   }
 }
 std::expected<void, StorageError> LsmTree::load_ssts() {
-  if (std::filesystem::exists("lsm.meta")) {
-    std::ifstream metafile{"lsm.meta"};
+  if (std::filesystem::exists(metadata_file_name_)) {
+    std::ifstream metafile{metadata_file_name_};
     std::string line;
     while (std::getline(metafile, line)) {
       if (line.contains(".sst")) {
@@ -167,13 +167,13 @@ LsmTree::Stats LsmTree::stats() const {
   };
 }
 std::expected<void, StorageError> LsmTree::update_meta(SSTable& sstable) {
-  std::ofstream metafile("lsm.meta", std::ios::app);
+  std::ofstream metafile(metadata_file_name_, std::ios::app);
   if (!metafile.is_open()) {
-    return std::unexpected(StorageError::file_open("lsm.meta"));
+    return std::unexpected(StorageError::file_open(metadata_file_name_));
   }
   metafile << sstable.path().filename().string() << '\n';
   if (!metafile.good()) {
-    return std::unexpected(StorageError::file_write("lsm.meta"));
+    return std::unexpected(StorageError::file_write(metadata_file_name_));
   }
   return {};
 }
@@ -191,7 +191,7 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
     return {};
   }
   std::vector<SSTable> new_ssts;
-  auto new_sst = SSTable::create();
+  auto new_sst = SSTable::create(database_name_.string());
   if (!new_sst) {
     return std::unexpected(new_sst.error());
   }
@@ -244,12 +244,16 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
 
   // Second pass: k-way merge into blocks.
   size_t k = ss_tables_.size();
+
   struct merge_helper {
     std::optional<std::pair<std::string, std::string>> kv;
+    size_t index;
     SSTable* sst;
   };
+
   auto merge_comparator = [](const merge_helper& a, const merge_helper& b) {
-    return a.kv->first > b.kv->first;
+    if (a.kv->first != b.kv->first) return a.kv->first > b.kv->first;
+    return a.index < b.index;
   };
   std::priority_queue<merge_helper, std::vector<merge_helper>,
                       decltype(merge_comparator)>
@@ -263,16 +267,20 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
       return std::unexpected(entry.error());
     }
     if (entry->has_value()) {
-      queue.push({std::move(entry.value()), &ss_tables_[i]});
+      queue.push({std::move(entry.value()), i, &ss_tables_[i]});
     }
   }
 
   // Block as the temporary buffer.
   Block block;
+  std::optional<merge_helper> prev = std::nullopt;
   while (!queue.empty()) {
     auto top = queue.top();
     queue.pop();
     if (!top.kv.has_value()) {
+      continue;
+    }
+    if (prev != std::nullopt && top.kv->first == prev->kv->first) {
       continue;
     }
 
@@ -297,8 +305,9 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
       return std::unexpected(next.error());
     }
     if (next->has_value()) {
-      queue.push({std::move(next.value()), top.sst});
+      queue.push({std::move(next.value()), top.index, top.sst});
     }
+    prev = top;
   }
 
   // Write leftover to the new SSTable.
@@ -332,7 +341,7 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
   cleanup_sst_files(ss_tables_);
   ss_tables_ = std::move(new_ssts);
 
-  std::filesystem::resize_file("lsm.meta", 0);
+  std::filesystem::resize_file(metadata_file_name_, 0);
 
   for (auto& sst : ss_tables_) {
     auto res = update_meta(sst);
@@ -352,7 +361,7 @@ std::expected<void, StorageError> LsmTree::maybe_compact1() {
   std::vector<SSTable> new_ssts;
   for (size_t i = 0; i + 1 < ss_tables_.size(); i += 2) {
     // Make a new sst
-    auto sst = SSTable::create();
+    auto sst = SSTable::create(database_name_.string());
     if (!sst) {
       return std::unexpected(sst.error());
     }
@@ -459,7 +468,7 @@ std::expected<void, StorageError> LsmTree::maybe_compact1() {
   cleanup_sst_files(ss_tables_);
   ss_tables_ = std::move(new_ssts);
 
-  std::filesystem::resize_file("lsm.meta", 0);
+  std::filesystem::resize_file(metadata_file_name_, 0);
 
   for (auto& sst : ss_tables_) {
     auto res = update_meta(sst);

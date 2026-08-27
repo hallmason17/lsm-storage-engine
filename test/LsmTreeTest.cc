@@ -10,7 +10,9 @@ using namespace lsm;
 
 class LsmTreeTest : public ::testing::Test {
  protected:
-  std::filesystem::path wal_path_ = "lsm.wal";
+  std::filesystem::path database_name_ = "test";
+  std::filesystem::path wal_path_ = "test.wal";
+  std::filesystem::path metadata_path_ = "test.meta";
 
   void SetUp() override {
     // Clean up any leftover files from previous runs
@@ -22,6 +24,7 @@ class LsmTreeTest : public ::testing::Test {
  private:
   void cleanup_test_files() {
     std::filesystem::remove(wal_path_);
+    std::filesystem::remove(metadata_path_);
     // Remove any SST files created during tests
     for (const auto& entry :
          std::filesystem::directory_iterator(std::filesystem::current_path())) {
@@ -29,17 +32,16 @@ class LsmTreeTest : public ::testing::Test {
         std::filesystem::remove(entry.path());
       }
     }
-    std::filesystem::remove("lsm.meta");
   }
 };
 
 TEST_F(LsmTreeTest, GetReturnsNulloptForMissingKey) {
-  LsmTree lsm;
+  LsmTree lsm("test");
   EXPECT_EQ(lsm.get("nonexistent"), std::nullopt);
 }
 
 TEST_F(LsmTreeTest, PutThenGet) {
-  LsmTree lsm;
+  LsmTree lsm("test");
   lsm.put("foo", "bar");
   auto result = lsm.get("foo");
   ASSERT_TRUE(result.has_value());
@@ -47,14 +49,14 @@ TEST_F(LsmTreeTest, PutThenGet) {
 }
 
 TEST_F(LsmTreeTest, PutOverwritesExistingKey) {
-  LsmTree lsm;
+  LsmTree lsm("test");
   lsm.put("key", "value1");
   lsm.put("key", "value2");
   EXPECT_EQ(*lsm.get("key"), "value2");
 }
 
 TEST_F(LsmTreeTest, MultipleKeyValuePairs) {
-  LsmTree lsm;
+  LsmTree lsm("test");
   lsm.put("a", "1");
   lsm.put("b", "2");
   lsm.put("c", "3");
@@ -66,7 +68,7 @@ TEST_F(LsmTreeTest, MultipleKeyValuePairs) {
 
 TEST_F(LsmTreeTest, PutWritesToWal) {
   {
-    LsmTree lsm;
+    LsmTree lsm("test");
     lsm.put("key", "value");
   }
 
@@ -93,7 +95,7 @@ TEST_F(LsmTreeTest, PutWritesToWal) {
 // --- SSTable integration tests ---
 
 TEST_F(LsmTreeTest, MemTableTakesPrecedenceOverSSTable) {
-  LsmTree lsm;
+  LsmTree lsm("test");
 
   // Put enough data to trigger a flush
   std::string large_value(constants::kMemTableFlushThreshold, 'x');
@@ -109,7 +111,7 @@ TEST_F(LsmTreeTest, MemTableTakesPrecedenceOverSSTable) {
 }
 
 TEST_F(LsmTreeTest, MultipleFlushesMaintainData) {
-  LsmTree lsm;
+  LsmTree lsm("test");
 
   // Trigger multiple flushes
   std::string large_value(constants::kMemTableFlushThreshold, 'x');
@@ -129,7 +131,7 @@ TEST_F(LsmTreeTest, MultipleFlushesMaintainData) {
 }
 
 TEST_F(LsmTreeTest, NewerSSTableTakesPrecedence) {
-  LsmTree lsm;
+  LsmTree lsm("test");
 
   std::string large_value(constants::kMemTableFlushThreshold, 'x');
 
@@ -148,7 +150,7 @@ TEST_F(LsmTreeTest, NewerSSTableTakesPrecedence) {
 }
 
 TEST_F(LsmTreeTest, GetMissingKeyAfterFlush) {
-  LsmTree lsm;
+  LsmTree lsm("test");
 
   std::string large_value(constants::kMemTableFlushThreshold, 'x');
   lsm.put("exists", large_value);  // Triggers flush
@@ -161,7 +163,7 @@ TEST_F(LsmTreeTest, GetMissingKeyAfterFlush) {
 // --- Compaction tests ---
 
 TEST_F(LsmTreeTest, CompactionTriggersAfterFourSSTables) {
-  LsmTree lsm;
+  LsmTree lsm("test");
 
   std::string large_value(constants::kMemTableFlushThreshold, 'x');
 
@@ -186,7 +188,7 @@ TEST_F(LsmTreeTest, CompactionTriggersAfterFourSSTables) {
 }
 
 TEST_F(LsmTreeTest, CompactionPreservesAllKeys) {
-  LsmTree lsm;
+  LsmTree lsm("test");
 
   std::string large_value(constants::kMemTableFlushThreshold, 'x');
 
@@ -217,7 +219,7 @@ TEST_F(LsmTreeTest, CompactionPreservesAllKeys) {
 }
 
 TEST_F(LsmTreeTest, CompactionKeepsNewerValueOnKeyCollision) {
-  LsmTree lsm;
+  LsmTree lsm("test");
 
   std::string large_value(constants::kMemTableFlushThreshold, 'x');
 
@@ -241,7 +243,7 @@ TEST_F(LsmTreeTest, CompactionKeepsNewerValueOnKeyCollision) {
 }
 
 TEST_F(LsmTreeTest, CompactionHandlesMixedNewAndOldKeys) {
-  LsmTree lsm;
+  LsmTree lsm("test");
 
   std::string large_value(constants::kMemTableFlushThreshold, 'x');
 
@@ -279,7 +281,7 @@ TEST_F(LsmTreeTest, CompactionHandlesMixedNewAndOldKeys) {
 }
 
 TEST_F(LsmTreeTest, CompactionReducesSSTableCount) {
-  LsmTree lsm;
+  LsmTree lsm("test");
 
   std::string large_value(constants::kMemTableFlushThreshold, 'x');
 
@@ -298,14 +300,14 @@ TEST_F(LsmTreeTest, CompactionReducesSSTableCount) {
     }
   }
 
-  // After compaction of 4 SSTables merging in pairs, should have 2
-  EXPECT_EQ(sst_count, 2) << "Expected 2 SSTables after compacting 4";
+  // After compaction of 4 SSTables merging, should have 1
+  EXPECT_EQ(sst_count, 1) << "Expected 1 SSTable after compacting 4";
 }
 
 TEST_F(LsmTreeTest, DataSurvivesRestartAfterCompaction) {
   // First session: create data and trigger compaction
   {
-    LsmTree lsm;
+    LsmTree lsm("test");
 
     std::string large_value(constants::kMemTableFlushThreshold, 'x');
 
@@ -324,7 +326,7 @@ TEST_F(LsmTreeTest, DataSurvivesRestartAfterCompaction) {
 
   // Second session: verify data persisted
   {
-    LsmTree lsm;
+    LsmTree lsm("test");
 
     EXPECT_EQ(*lsm.get("persistent_key1"), "persistent_value1");
     EXPECT_EQ(*lsm.get("persistent_key2"), "persistent_value2");

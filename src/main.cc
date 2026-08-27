@@ -4,7 +4,7 @@
 int main() {
   using namespace lsm;
   {
-    LsmTree lsm;
+    LsmTree lsm("test");
     lsm.put("foo", "bar");
     auto bar = lsm.get("foo");
     lsm.put("foo", "bar11");
@@ -17,7 +17,7 @@ int main() {
     std::println("Put: {} ops, avg {:.0f}us, max {}us", s.put_count,
                  s.avg_put_time_us, s.max_put_time_us_);
   }
-  LsmTree lsm;
+  LsmTree lsm("test");
   for (int i = 0; i < 100000; i++) {
     auto key = "key" + std::to_string(i);
     auto val = lsm.get(key);
