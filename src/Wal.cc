@@ -115,11 +115,12 @@ std::expected<void, StorageError> Wal::write(std::string_view key,
   size_t remaining = write_buffer.size();
   ssize_t written = 0;
   while (remaining > 0) {
-    written = ::write(fd_, write_buffer.data() + written, remaining);
-    if (written == -1) {
+    auto write_res = ::write(fd_, write_buffer.data() + written, remaining);
+    if (write_res == -1) {
       return std::unexpected{StorageError::file_write(path())};
     }
-    remaining -= static_cast<size_t>(written);
+    written += write_res;
+    remaining -= static_cast<size_t>(write_res);
   }
   unsynced_.fetch_add(write_buffer.size());
   if (sync) {

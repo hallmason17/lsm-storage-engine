@@ -28,10 +28,14 @@ class SSTable {
   /**
    * @brief Creates a new SSTable with a generated filename.
    *
-   * The filename is the current timestamp to ensure uniqueness.
+   * The filename is the current timestamp with the database name to ensure
+   * uniqueness.
+   *
+   * @param database_name The name of the associated database.
    * @return SSTable on success, StorageError if the file cannot be created.
    */
-  static std::expected<SSTable, StorageError> create();
+  static std::expected<SSTable, StorageError> create(
+      const std::string database_name);
 
   /**
    * @brief Creates a new SSTable at the specified path.
@@ -47,7 +51,7 @@ class SSTable {
    * @return SSTable on success, StorageError if the file cannot be opened.
    */
   static std::expected<SSTable, StorageError> open(
-      const std::filesystem::path&);
+      const std::filesystem::path& path);
 
   /**
    * @brief Constructs an SSTable with the given path (does not open file).

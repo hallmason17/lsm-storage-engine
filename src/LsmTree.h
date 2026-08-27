@@ -26,8 +26,11 @@ namespace lsm {
  */
 class LsmTree {
  public:
-  // What do I even name a WAL?
-  LsmTree() : wal_(std::filesystem::path("lsm.wal")) {
+  LsmTree(const std::filesystem::path& database_name)
+      : wal_(std::format("{}.{}", database_name.c_str(), "wal")),
+        database_name_(std::move(database_name)),
+        metadata_file_name_(
+            std::format("{}.{}", database_name_.c_str(), "meta")) {
     // Restore the memtable from WAL on startup.
     auto result = mem_table_.restore_from_wal(wal_.path());
     if (!result) {
@@ -88,6 +91,8 @@ class LsmTree {
  private:
   MemTable mem_table_;
   Wal wal_;
+  std::filesystem::path database_name_;
+  std::filesystem::path metadata_file_name_;
 
   /**
    * SSTables ordered oldest to newest (new SSTables are pushed to back).

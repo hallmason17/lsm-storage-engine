@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "TestUtil.h"
 #include "Wal.h"
 
 using namespace lsm;
@@ -7,8 +8,7 @@ using namespace lsm;
 class WalTest : public ::testing::Test {
  protected:
   std::filesystem::path test_path_ = "test_wal.log";
-
-  void TearDown() override { std::filesystem::remove(test_path_); }
+  lsm::test::TempDir temp_dir_;
 };
 
 TEST_F(WalTest, ConstructorCreatesFile) {

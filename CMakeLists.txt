@@ -13,6 +13,7 @@ set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
 include(FetchContent)
+enable_testing()
 
 FetchContent_Declare(
 xxHash

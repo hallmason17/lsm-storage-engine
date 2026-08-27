@@ -9,10 +9,12 @@
 #include <fstream>
 #include <mutex>
 #include <optional>
+#include <queue>
 #include <ranges>
 #include <shared_mutex>
 #include <stdexcept>
 
+#include "BloomFilter.h"
 #include "MemTable.h"
 #include "SSTable.h"
 #include "StorageError.h"
@@ -61,7 +63,7 @@ std::expected<void, StorageError> LsmTree::flush_memtable() {
     return res;
   }
   auto result =
-      SSTable::create()
+      SSTable::create(database_name_.string())
           .and_then([&](SSTable sst) {
             return update_meta(sst).transform([&] { return std::move(sst); });
           })
@@ -122,8 +124,8 @@ void LsmTree::put(const std::string& key, const std::string& value, bool sync) {
   }
 }
 std::expected<void, StorageError> LsmTree::load_ssts() {
-  if (std::filesystem::exists("lsm.meta")) {
-    std::ifstream metafile{"lsm.meta"};
+  if (std::filesystem::exists(metadata_file_name_)) {
+    std::ifstream metafile{metadata_file_name_};
     std::string line;
     while (std::getline(metafile, line)) {
       if (line.contains(".sst")) {
@@ -165,13 +167,13 @@ LsmTree::Stats LsmTree::stats() const {
   };
 }
 std::expected<void, StorageError> LsmTree::update_meta(SSTable& sstable) {
-  std::ofstream metafile("lsm.meta", std::ios::app);
+  std::ofstream metafile(metadata_file_name_, std::ios::app);
   if (!metafile.is_open()) {
-    return std::unexpected(StorageError::file_open("lsm.meta"));
+    return std::unexpected(StorageError::file_open(metadata_file_name_));
   }
   metafile << sstable.path().filename().string() << '\n';
   if (!metafile.good()) {
-    return std::unexpected(StorageError::file_write("lsm.meta"));
+    return std::unexpected(StorageError::file_write(metadata_file_name_));
   }
   return {};
 }
@@ -185,122 +187,161 @@ static void cleanup_sst_files(std::vector<SSTable>& ss_tables) {
 }
 
 std::expected<void, StorageError> LsmTree::maybe_compact() {
-  // some random number for testing
-  // TODO: come up with a real compaction trigger
   if (ss_tables_.size() < 4) {
     return {};
   }
   std::vector<SSTable> new_ssts;
-  for (size_t i = 0; i + 1 < ss_tables_.size(); i += 2) {
-    // Make a new sst
-    auto sst = SSTable::create();
-    if (!sst) {
-      return std::unexpected(sst.error());
-    }
-    SSTable& left_table = ss_tables_[i];
-    SSTable& right_table = ss_tables_[i + 1];
-    auto min_key = left_table.header().min_key < right_table.header().min_key
-                       ? left_table.header().min_key
-                       : right_table.header().min_key;
-    auto max_key = left_table.header().max_key > right_table.header().max_key
-                       ? left_table.header().max_key
-                       : right_table.header().max_key;
-    SSTable::Header header{min_key, max_key};
-    if (auto res = sst.value().write_header(std::move(header)); !res) {
-      return std::unexpected{res.error()};
-    }
-    size_t bytes_written{sst->header().size};
+  auto new_sst = SSTable::create(database_name_.string());
+  if (!new_sst) {
+    return std::unexpected(new_sst.error());
+  }
 
-    // First pass: collect all keys for the bloom filter and count entries
-    left_table.rewind();
-    right_table.rewind();
+  // BloomFilter(n) allocates n * 10 bits — recover entry counts from that.
+  size_t num_entries{0};
+  std::string min_key, max_key;
+  for (auto& sst : ss_tables_) {
+    auto bloom = sst.read_bloom_filter();
+    if (!bloom) {
+      return std::unexpected(bloom.error());
+    }
+    num_entries += bloom.value().bits().size() / 10;
 
-    std::vector<std::pair<std::string, std::string>> all_entries;
-    auto lhs = left_table.next();
-    auto rhs = right_table.next();
-    while ((lhs && rhs) && (lhs->has_value() || rhs->has_value())) {
-      if (!lhs->has_value() && rhs->has_value()) {
-        all_entries.emplace_back(rhs->value());
-        rhs = right_table.next();
-      } else if (!rhs->has_value() && lhs->has_value()) {
-        all_entries.emplace_back(lhs->value());
-        lhs = left_table.next();
-      } else if (lhs->value().first < rhs->value().first) {
-        all_entries.emplace_back(lhs->value());
-        lhs = left_table.next();
-      } else if (rhs->value().first < lhs->value().first) {
-        all_entries.emplace_back(rhs->value());
-        rhs = right_table.next();
-      } else {
-        // Keys are equal - keep the newer value (rhs)
-        all_entries.emplace_back(rhs->value());
-        lhs = left_table.next();
-        rhs = right_table.next();
+    if (min_key.empty() || sst.header().min_key < min_key) {
+      min_key = sst.header().min_key;
+    }
+    if (max_key.empty() || sst.header().max_key > max_key) {
+      max_key = sst.header().max_key;
+    }
+  }
+
+  // First pass: populate bloom
+  BloomFilter new_bloom{num_entries};
+  for (auto& sst : ss_tables_) {
+    sst.rewind();
+    while (true) {
+      auto entry = sst.next();
+      if (!entry) {
+        return std::unexpected(entry.error());
       }
-    }
-
-    size_t bf_size = all_entries.size();
-    BloomFilter bloom_filter{bf_size};
-    for (const auto& [key, val] : all_entries) {
-      bloom_filter.add(std::string_view{key});
-    }
-    auto bf_res = sst->write_bloom_filter(std::move(bloom_filter));
-    if (!bf_res) {
-      return std::unexpected{bf_res.error()};
-    }
-    bytes_written += bf_res.value();
-
-    // Second pass: write all entries as blocks
-    Block block;
-    for (const auto& [key, val] : all_entries) {
-      if (block.append(key, val) == 0) {
-        sst->index().emplace_back(std::string(block.first().value()),
-                                  bytes_written);
-        auto write_res = sst->write_block(block);
-        if (!write_res) {
-          return std::unexpected{write_res.error()};
-        }
-        bytes_written += write_res.value();
-        block = Block{};
-        if (block.append(key, val) == 0) {
-          return std::unexpected(StorageError::file_write(sst->path()));
-        }
+      if (!entry->has_value()) {
+        break;
       }
+      new_bloom.add(entry->value().first);
     }
-    if (block.size() > 0) {
-      sst->index().emplace_back(std::string(block.first().value()),
-                                bytes_written);
-      auto write_res = sst->write_block(block);
+  }
+
+  SSTable::Header header{min_key, max_key};
+  if (auto res = new_sst.value().write_header(std::move(header)); !res) {
+    return std::unexpected{res.error()};
+  }
+  size_t bytes_written{new_sst->header().size};
+
+  auto bf_res = new_sst->write_bloom_filter(std::move(new_bloom));
+  if (!bf_res) {
+    return std::unexpected{bf_res.error()};
+  }
+  bytes_written += bf_res.value();
+
+  // Second pass: k-way merge into blocks.
+  size_t k = ss_tables_.size();
+
+  struct merge_helper {
+    std::optional<std::pair<std::string, std::string>> kv;
+    size_t index;
+    SSTable* sst;
+  };
+
+  auto merge_comparator = [](const merge_helper& a, const merge_helper& b) {
+    if (a.kv->first != b.kv->first) return a.kv->first > b.kv->first;
+    return a.index < b.index;
+  };
+  std::priority_queue<merge_helper, std::vector<merge_helper>,
+                      decltype(merge_comparator)>
+      queue{merge_comparator};
+
+  // Load with first value from each SSTable.
+  for (size_t i = 0; i < k; ++i) {
+    ss_tables_[i].rewind();
+    auto entry = ss_tables_[i].next();
+    if (!entry) {
+      return std::unexpected(entry.error());
+    }
+    if (entry->has_value()) {
+      queue.push({std::move(entry.value()), i, &ss_tables_[i]});
+    }
+  }
+
+  // Block as the temporary buffer.
+  Block block;
+  std::optional<merge_helper> prev = std::nullopt;
+  while (!queue.empty()) {
+    auto top = queue.top();
+    queue.pop();
+    if (!top.kv.has_value()) {
+      continue;
+    }
+    if (prev != std::nullopt && top.kv->first == prev->kv->first) {
+      continue;
+    }
+
+    if (block.append(top.kv->first, top.kv->second) == 0) {
+      // Block full, save it to the new SSTable and make a new block.
+      new_sst->index().emplace_back(std::string(block.first().value()),
+                                    bytes_written);
+      auto write_res = new_sst->write_block(block);
       if (!write_res) {
         return std::unexpected{write_res.error()};
       }
       bytes_written += write_res.value();
+      block = Block{};
+      if (block.append(top.kv->first, top.kv->second) == 0) {
+        return std::unexpected(StorageError::file_write(new_sst->path()));
+      }
     }
-    left_table.marked_for_delete_ = true;
-    right_table.marked_for_delete_ = true;
 
-    SSTable::Footer footer;
-    footer.index_offset = bytes_written;
-    auto idx_res = sst->write_index();
-    if (!idx_res) {
-      return std::unexpected{idx_res.error()};
+    // Advance the iterator for this SSTable, reinsert into the queue.
+    auto next = top.sst->next();
+    if (!next) {
+      return std::unexpected(next.error());
     }
-    footer.index_size = idx_res.value();
-    footer.num_index_entries = sst->index().size();
+    if (next->has_value()) {
+      queue.push({std::move(next.value()), top.index, top.sst});
+    }
+    prev = top;
+  }
 
-    if (auto res = sst.value().write_footer(footer); !res) {
-      return std::unexpected{res.error()};
+  // Write leftover to the new SSTable.
+  if (block.size() > 0) {
+    new_sst->index().emplace_back(std::string(block.first().value()),
+                                  bytes_written);
+    auto write_res = new_sst->write_block(block);
+    if (!write_res) {
+      return std::unexpected{write_res.error()};
     }
-    new_ssts.push_back(std::move(sst.value()));
+    bytes_written += write_res.value();
   }
-  if (ss_tables_.size() % 2 == 1) {
-    new_ssts.push_back(std::move(ss_tables_.back()));
-    ss_tables_.pop_back();
+
+  for (auto& sst : ss_tables_) {
+    sst.marked_for_delete_ = true;
   }
+
+  SSTable::Footer footer;
+  footer.index_offset = bytes_written;
+  auto idx_res = new_sst->write_index();
+  if (!idx_res) {
+    return std::unexpected{idx_res.error()};
+  }
+  footer.index_size = idx_res.value();
+  footer.num_index_entries = new_sst->index().size();
+
+  if (auto res = new_sst.value().write_footer(footer); !res) {
+    return std::unexpected{res.error()};
+  }
+  new_ssts.push_back(std::move(new_sst.value()));
   cleanup_sst_files(ss_tables_);
   ss_tables_ = std::move(new_ssts);
 
-  std::filesystem::resize_file("lsm.meta", 0);
+  std::filesystem::resize_file(metadata_file_name_, 0);
 
   for (auto& sst : ss_tables_) {
     auto res = update_meta(sst);
@@ -308,6 +349,7 @@ std::expected<void, StorageError> LsmTree::maybe_compact() {
       return std::unexpected(res.error());
     }
   }
+
   return {};
 }
 

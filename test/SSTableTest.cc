@@ -5,23 +5,14 @@
 
 #include "MemTable.h"
 #include "SSTable.h"
+#include "TestUtil.h"
 
 using namespace lsm;
 
 class SSTableTest : public ::testing::Test {
  protected:
   std::filesystem::path test_path_ = "test_sstable.sst";
-
-  void SetUp() override {
-    // Clean up any leftover files from previous runs
-    std::filesystem::remove(test_path_);
-    std::filesystem::remove("lsm.meta");
-  }
-
-  void TearDown() override {
-    std::filesystem::remove(test_path_);
-    std::filesystem::remove("lsm.meta");
-  }
+  lsm::test::TempDir temp_dir_;
 
   // Helper to write test data to SSTable via MemTable flush
   void write_test_data(

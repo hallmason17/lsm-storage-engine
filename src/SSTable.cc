@@ -118,10 +118,11 @@ std::expected<std::optional<std::string>, StorageError> SSTable::get(
   }
   return Block::find(mapped_data_.subspan(start, end - start), key);
 }
-std::expected<SSTable, StorageError> SSTable::create() {
+std::expected<SSTable, StorageError> SSTable::create(
+    const std::string database_name) {
   SSTable sst;
   auto now = std::chrono::steady_clock::now().time_since_epoch();
-  sst.path_ = std::to_string(now.count()) + ".sst";
+  sst.path_ = database_name + "-" + std::to_string(now.count()) + ".sst";
   if (auto res = sst.open_file(); !res) {
     return std::unexpected{res.error()};
   }
@@ -475,6 +476,9 @@ std::expected<size_t, StorageError> SSTable::write_bloom_filter(
 }
 
 std::expected<BloomFilter, StorageError> SSTable::read_bloom_filter() {
+  if (!bloom_filter_.bits().empty()) {
+    return bloom_filter_;
+  }
   // After header
   file_pos_ = static_cast<off_t>(header_.size);
   size_t bf_size{0};
