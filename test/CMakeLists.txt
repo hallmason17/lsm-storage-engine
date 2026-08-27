@@ -6,8 +6,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(googletest)
 
-enable_testing()
-
 add_executable(lsm_test
     MemTableTest.cc
     WalTest.cc
@@ -19,4 +17,7 @@ target_link_options(lsm_test PRIVATE
   $<$<CONFIG:Debug>:-fsanitize=address,undefined>
 )
 target_link_libraries(lsm_test lsm xxHash::xxhash gtest_main)
+
+include(GoogleTest)
+gtest_discover_tests(lsm_test)
 

@@ -7,6 +7,7 @@
 #include "MemTable.h"
 #include "SSTable.h"
 #include "StorageError.h"
+#include "TestUtil.h"
 
 using namespace lsm;
 
@@ -14,17 +15,7 @@ class MemTableFlushTest : public ::testing::Test {
  protected:
   std::filesystem::path test_path_ = "test_memtable_flush.sst";
   std::string test_database_name_ = "test_memtable_flush";
-
-  void TearDown() override {
-    std::filesystem::remove(test_path_);
-    // Remove any auto-named SST files created during tests
-    for (const auto& entry :
-         std::filesystem::directory_iterator(std::filesystem::current_path())) {
-      if (entry.path().extension() == ".sst") {
-        std::filesystem::remove(entry.path());
-      }
-    }
-  }
+  lsm::test::TempDir temp_dir_;
 };
 
 TEST(MemTableTest, GetReturnsNulloptForMissingKey) {
