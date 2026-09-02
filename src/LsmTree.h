@@ -26,7 +26,7 @@ namespace lsm {
  */
 class LsmTree {
  public:
-  LsmTree(const std::filesystem::path& database_name)
+  LsmTree(std::filesystem::path database_name)
       : wal_(std::format("{}.{}", database_name.c_str(), "wal")),
         database_name_(std::move(database_name)),
         metadata_file_name_(

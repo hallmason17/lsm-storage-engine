@@ -116,11 +116,9 @@ void LsmTree::put(const std::string& key, const std::string& value, bool sync) {
   total_put_time_us_.fetch_add(duration_us, std::memory_order_relaxed);
   put_count_.fetch_add(1, std::memory_order_relaxed);
   auto max = max_put_time_us_.load(std::memory_order_relaxed);
-  while (duration_us > max) {
-    if (max_put_time_us_.compare_exchange_weak(max, duration_us,
-                                               std::memory_order_relaxed,
-                                               std::memory_order_relaxed))
-      break;
+  while (max < duration_us && !max_put_time_us_.compare_exchange_weak(
+                                  max, duration_us, std::memory_order_relaxed,
+                                  std::memory_order_relaxed)) {
   }
 }
 std::expected<void, StorageError> LsmTree::load_ssts() {
